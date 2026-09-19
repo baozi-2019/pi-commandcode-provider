@@ -74,7 +74,7 @@ describe("commandcode-quota command", () => {
     assert.equal(requestKey, "fallback-key")
     assert.equal(requestBase, "https://api.commandcode.ai")
     assert.equal(ctx.notifications.at(-1)?.type, "info")
-    assert.match(ctx.notifications.at(-1)?.message ?? "", /Requests: 2/)
+    assert.match(ctx.notifications.at(-1)?.message ?? "", /Monthly \$1\.00 used/)
   })
 
   it("warns without calling the endpoint when no API key is available", async () => {

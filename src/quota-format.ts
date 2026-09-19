@@ -1,26 +1,33 @@
-import type {
-  CommandCodeCredits,
-  CommandCodeQuota,
-  CommandCodeSubscription,
-  CommandCodeWindowLimit,
-} from "./quota-types.ts"
+import type { CommandCodeQuota, CommandCodeWindowLimit } from "./quota-types.ts"
+
+const BAR_WIDTH = 20
+const BAR_FILLED = "█"
+const BAR_EMPTY = "░"
+
+const WINDOW_LABELS: Record<CommandCodeWindowLimit["window"], string> = {
+  fiveHour: "5-hour",
+  weekly: "Weekly",
+}
+
+function progressBar(used: number, cap: number): { bar: string; percent: number } {
+  const percent = cap > 0 ? Math.round((used / cap) * 100) : 0
+  const clamped = Math.max(0, Math.min(100, percent))
+  const filled = Math.round((clamped / 100) * BAR_WIDTH)
+  return { bar: BAR_FILLED.repeat(filled) + BAR_EMPTY.repeat(BAR_WIDTH - filled), percent }
+}
+
+function windowLine(limit: CommandCodeWindowLimit, now: () => number): string {
+  const { bar, percent } = progressBar(limit.used, limit.cap)
+  const amounts = `$${limit.used.toFixed(2)} / $${limit.cap.toFixed(2)}`
+  const reset = limit.resetAt === null ? "" : ` · resets ${formatResetClock(limit.resetAt, now)}`
+  return `${WINDOW_LABELS[limit.window].padEnd(7)} ${bar}  ${percent}% used · ${amounts}${reset}`
+}
 
 export function formatWindowLimits(
   limits: readonly CommandCodeWindowLimit[],
   now: () => number = Date.now,
 ): string[] {
-  const labels: Record<CommandCodeWindowLimit["window"], string> = {
-    fiveHour: "5-hour",
-    weekly: "Weekly",
-  }
-
-  return limits.map((limit) => {
-    const used = limit.used.toFixed(2)
-    const cap = limit.cap.toFixed(2)
-    const percent = limit.cap > 0 ? Math.round((limit.used / limit.cap) * 100) : 0
-    const reset = limit.resetAt === null ? "" : ` (resets ${formatResetClock(limit.resetAt, now)})`
-    return `${labels[limit.window]}: ${used} / ${cap} credits (${percent}% used)${reset}`
-  })
+  return limits.map((limit) => windowLine(limit, now))
 }
 
 function formatResetClock(resetAtSeconds: number, now: () => number): string {
@@ -39,16 +46,6 @@ function formatResetClock(resetAtSeconds: number, now: () => number): string {
   return days === 1 ? "in 1 day" : `in ${days} days`
 }
 
-function creditsDetail(credits: CommandCodeCredits | null): string | undefined {
-  if (!credits) return undefined
-  const parts = [
-    `monthly $${credits.monthlyCredits.toFixed(2)}`,
-    `purchased $${credits.purchasedCredits.toFixed(2)}`,
-  ]
-  if (credits.freeCredits > 0) parts.push(`free $${credits.freeCredits.toFixed(2)}`)
-  return `Sources: ${parts.join(" / ")}`
-}
-
 function parsePeriodEnd(value: string): Date | null {
   const trimmed = value.trim()
   const timestamp = /^\d+$/.test(trimmed) ? Number(trimmed) : Date.parse(trimmed)
@@ -58,86 +55,55 @@ function parsePeriodEnd(value: string): Date | null {
   return Number.isNaN(date.getTime()) ? null : date
 }
 
-function subscriptionLine(
-  subscription: CommandCodeSubscription,
-  now: () => number = Date.now,
-): string {
-  const plan = (subscription.planId ?? "Unknown").replace(/[_-]+/g, " ").trim()
-  const status = subscription.status ? ` (${subscription.status})` : ""
-  let renewal = ""
-  if (subscription.currentPeriodEnd) {
-    const end = parsePeriodEnd(subscription.currentPeriodEnd)
-    if (end) {
-      const diffMs = end.getTime() - now()
-      const days = Math.ceil(diffMs / 86_400_000)
-      const dateStr = end.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        timeZone: "UTC",
-      })
-      if (days > 0) {
-        renewal = ` · renews ${dateStr} (${days}d)`
-      } else if (days === 0) {
-        renewal = ` · renews ${dateStr} (today)`
-      } else {
-        renewal = ` · renewed ${dateStr}`
-      }
-    }
-  }
-  return `Plan: ${plan}${status}${renewal}`
+/** Renewal suffix for the monthly line, e.g. " · renews Feb 1 (17d)". */
+function renewalSuffix(quota: CommandCodeQuota, now: () => number): string {
+  const periodEnd = quota.subscription?.currentPeriodEnd
+  if (!periodEnd) return ""
+  const end = parsePeriodEnd(periodEnd)
+  if (!end) return ""
+
+  const dateStr = end.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  })
+  const days = Math.ceil((end.getTime() - now()) / 86_400_000)
+  if (days > 0) return ` · renews ${dateStr} (${days}d)`
+  if (days === 0) return ` · renews ${dateStr} (today)`
+  return ` · renewed ${dateStr}`
 }
 
-function formatTokens(tokens: number): string {
-  if (tokens >= 1_000_000_000) return `${(tokens / 1_000_000_000).toFixed(1)}B`
-  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`
-  if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}k`
-  return String(tokens)
+function monthlyLine(quota: CommandCodeQuota, now: () => number): string {
+  const spent = quota.summary?.totalCost
+  const remaining = quota.credits?.remainingCredits
+  const renewal = renewalSuffix(quota, now)
+
+  if (spent === undefined && remaining === undefined) {
+    return `Monthly unavailable${renewal}`
+  }
+  if (spent === undefined || remaining === undefined) {
+    const used = spent ?? 0
+    return `Monthly $${used.toFixed(2)} used (cap unavailable)${renewal}`
+  }
+
+  const pool = remaining + spent
+  const { bar, percent } = progressBar(spent, pool)
+  return `Monthly ${bar}  ${percent}% used · $${spent.toFixed(2)} / $${pool.toFixed(2)}${renewal}`
 }
 
 export function formatQuota(quota: CommandCodeQuota, now: () => number = Date.now): string {
-  const lines: string[] = []
-  const remaining = quota.credits?.remainingCredits ?? 0
-  const spent = quota.summary?.totalCost ?? 0
-  const pool = remaining + spent
-
-  if (quota.credits || quota.summary) {
-    lines.push("Credits")
-    lines.push(`  Remaining: $${remaining.toFixed(2)} of $${pool.toFixed(2)}`)
-    lines.push(`  Used: $${spent.toFixed(2)}`)
-    lines.push(`  ${pool > 0 ? Math.round((spent / pool) * 100) : 0}% used`)
-  }
-
-  const detail = creditsDetail(quota.credits)
-  if (detail) lines.push(detail)
-  if (quota.subscription) lines.push(subscriptionLine(quota.subscription, now))
-
-  if (quota.summary) {
-    lines.push("")
-    lines.push(quota.subscription?.currentPeriodStart ? "Usage (billing period)" : "Usage")
-    lines.push(`  Cost: $${quota.summary.totalCost.toFixed(2)}`)
-    lines.push(`  Requests: ${quota.summary.totalCount.toLocaleString("en-US")}`)
-    if (quota.summary.totalTokens !== undefined) {
-      lines.push(`  Tokens: ${formatTokens(quota.summary.totalTokens)}`)
-    }
-  }
-
-  lines.push("")
-  lines.push("Account")
-  lines.push(`  ${quota.account.keyName ?? quota.account.login}`)
-
   const limits = quota.credits?.windowLimits ?? []
-  if (limits.length > 0) {
-    lines.push("")
-    lines.push("Usage windows:")
-    lines.push(...formatWindowLimits(limits, now).map((line) => `  ${line}`))
-  }
+  const lines = (["fiveHour", "weekly"] as const).map((window) => {
+    const limit = limits.find((entry) => entry.window === window)
+    return limit ? windowLine(limit, now) : `${WINDOW_LABELS[window].padEnd(7)} unavailable`
+  })
+
+  lines.push(monthlyLine(quota, now))
 
   if ((quota.unavailable?.length ?? 0) > 0) {
     lines.push("")
     lines.push(`Unavailable: ${quota.unavailable?.join(", ")}`)
   }
 
-  lines.push("")
-  lines.push("Full detail: https://commandcode.ai/usage")
   return lines.join("\n")
 }

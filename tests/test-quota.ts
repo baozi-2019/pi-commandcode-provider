@@ -82,19 +82,20 @@ describe("Command Code quota", () => {
       summary: { totalCost: 0, totalCount: 0 },
     }
     const output = formatQuota(quota, () => 1_700_000_000_000)
-    assert.match(output, /Usage\n/)
     assert.doesNotMatch(output, /billing period/)
-    assert.match(output, /Requests: 0/)
+    assert.match(output, /Monthly \$0\.00 used \(cap unavailable\)/)
+    assert.match(output, /5-hour\s+unavailable/)
+    assert.match(output, /Weekly\s+unavailable/)
   })
 
-  it("formats window limits with percentage and reset clock", () => {
+  it("formats window limits with a progress bar, percentage and reset clock", () => {
     const limits: CommandCodeWindowLimit[] = [
       { window: "fiveHour", used: 7, cap: 14, resetAt: 1_700_000_000 },
       { window: "weekly", used: 0, cap: 35, resetAt: null },
     ]
     const lines = formatWindowLimits(limits)
-    assert.match(lines[0] ?? "", /^5-hour: 7\.00 \/ 14\.00 credits \(50% used\) \(resets/)
-    assert.match(lines[1] ?? "", /^Weekly: 0\.00 \/ 35\.00 credits \(0% used\)/)
+    assert.match(lines[0] ?? "", /^5-hour\s+█{10}░{10} {2}50% used · \$7\.00 \/ \$14\.00 · resets/)
+    assert.equal(lines[1] ?? "", `Weekly  ${"░".repeat(20)}  0% used · $0.00 / $35.00`)
   })
 
   it("uses the injected clock for the reset countdown", () => {
@@ -106,10 +107,10 @@ describe("Command Code quota", () => {
     }
     // now() shortly before reset -> a short "in Nm" countdown
     const soon = formatWindowLimits([limit], () => 1_699_999_000 * 1000)[0]
-    assert.match(soon ?? "", /\(resets in \d+m\)/)
+    assert.match(soon ?? "", /resets in \d+m/)
     // already past reset -> "soon"
     const past = formatWindowLimits([limit], () => 1_700_100_000 * 1000)[0]
-    assert.match(past ?? "", /\(resets soon\)/)
+    assert.match(past ?? "", /resets soon/)
   })
 
   it("fetches and normalizes the full quota snapshot", async () => {
@@ -312,7 +313,7 @@ describe("Command Code quota", () => {
     assert.match(result.error.message, /401/)
   })
 
-  it("formats a complete quota snapshot into readable output", () => {
+  it("formats a complete quota snapshot into progress bars", () => {
     const quota: CommandCodeQuota = {
       account: { login: "alice-inc", orgId: "org_1" },
       credits: {
@@ -335,20 +336,15 @@ describe("Command Code quota", () => {
     }
 
     const output = formatQuota(quota, () => Date.parse("2026-01-15T00:00:00Z"))
-    assert.doesNotMatch(output, /Command Code quota —/)
-    assert.match(output, /Credits/)
-    assert.match(output, /Remaining: \$55\.00 of \$67\.34/)
-    assert.match(output, /Used: \$12\.34/)
-    assert.match(output, /Sources: monthly \$40\.00 \/ purchased \$10\.00 \/ free \$5\.00/)
-    assert.match(output, /Plan: pro \(active\) · renews Feb 1 \(17d\)/)
-    assert.match(output, /Usage \(billing period\)/)
-    assert.match(output, /Cost: \$12\.34/)
-    assert.match(output, /Requests: 1,500/)
-    assert.match(output, /Account/)
-    assert.match(output, /alice-inc/)
-    assert.match(output, /5-hour: 8\.00 \/ 16\.00 credits/)
-    assert.match(output, /Weekly: 20\.00 \/ 40\.00 credits/)
-    assert.match(output, /https:\/\/commandcode\.ai\/usage/)
+    assert.match(output, /^5-hour\s+█{10}░{10} {2}50% used · \$8\.00 \/ \$16\.00/m)
+    assert.match(output, /^Weekly\s+█{10}░{10} {2}50% used · \$20\.00 \/ \$40\.00/m)
+    // Monthly pool = remaining + spent = 55 + 12.34 = 67.34 -> 18% used.
+    assert.match(
+      output,
+      /^Monthly █{4}░{16} {2}18% used · \$12\.34 \/ \$67\.34 · renews Feb 1 \(17d\)/m,
+    )
+    // The minimal view drops the old account/plan/credits-detail sections.
+    assert.doesNotMatch(output, /Credits|Sources:|Requests:|Account|commandcode\.ai\/usage/)
   })
 
   it("formats renewal dates in UTC and handles renewal edge cases", () => {
@@ -373,19 +369,19 @@ describe("Command Code quota", () => {
       )
 
     const beforeReset = formatRenewal("2026-02-01T00:00:00Z", "2026-01-31T12:00:00Z")
-    assert.match(beforeReset, /Plan: pro \(active\) · renews Feb 1 \(1d\)/)
+    assert.match(beforeReset, /Monthly unavailable · renews Feb 1 \(1d\)/)
 
     const numericTimestamp = formatRenewal(
       String(Date.parse("2026-02-01T00:00:00Z")),
       "2026-01-31T12:00:00Z",
     )
-    assert.match(numericTimestamp, /Plan: pro \(active\) · renews Feb 1 \(1d\)/)
+    assert.match(numericTimestamp, /renews Feb 1 \(1d\)/)
 
     const today = formatRenewal("2026-01-31T12:00:00Z", "2026-01-31T12:00:00Z")
-    assert.match(today, /Plan: pro \(active\) · renews Jan 31 \(today\)/)
+    assert.match(today, /renews Jan 31 \(today\)/)
 
     const expired = formatRenewal("2026-01-30T00:00:00Z", "2026-01-31T12:00:00Z")
-    assert.match(expired, /Plan: pro \(active\) · renewed Jan 30/)
+    assert.match(expired, /renewed Jan 30/)
 
     for (const currentPeriodEnd of [null, "not-a-date"]) {
       const output = formatRenewal(currentPeriodEnd, "2026-01-31T12:00:00Z")
