@@ -58,7 +58,21 @@ export function normalizePlanId(value: unknown): EffectivePlan {
   ) {
     return "provider"
   }
-  return "unknown"
+
+  // Billing systems prefix plan ids (for example "individual-goat"). Match
+  // whole separator-delimited tokens only, and take the lowest matching tier,
+  // so unknown prefixes or extra words never gain unintended access.
+  const tokens = value
+    .trim()
+    .toLowerCase()
+    .split(/[ _-]+/)
+    .filter(Boolean)
+  let matched: SubscriptionPlan | undefined
+  for (const token of tokens) {
+    if (!isSubscriptionPlan(token)) continue
+    if (!matched || planRank(token) < planRank(matched)) matched = token
+  }
+  return matched ?? "unknown"
 }
 
 export function configuredPlan(

@@ -110,6 +110,20 @@ describe("resolveCommandCodePlan() with a mocked account API", () => {
     })
   })
 
+  it("resolves the real prefixed billing planId (individual-goat)", async () => {
+    await withCacheDir(async ({ cachePath }) => {
+      // Shape observed from the live API: data.planId is "individual-goat".
+      const result = await resolveCommandCodePlan({
+        apiKey: MOCK_KEY,
+        cachePath,
+        fetchImpl: accountFetch({ data: { planId: "individual-goat", status: "active" } }),
+      })
+      assert.equal(result.resolution.plan, "goat")
+      assert.equal(result.resolution.filterPlan, "goat")
+      assert.equal(result.warning, undefined)
+    })
+  })
+
   it("lets COMMANDCODE_PLAN override detection without touching the network", async () => {
     await withCacheDir(async ({ cachePath }) => {
       let requests = 0

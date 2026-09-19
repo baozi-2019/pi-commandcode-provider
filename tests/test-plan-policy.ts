@@ -67,11 +67,12 @@ describe("filterCommandCodeModels()", () => {
       max: expectedCountAtOrBelow("max"),
     }
 
-    // Sanity anchor from the command-code@1.56.0 snapshot: go < goat < pro < max = full catalog.
+    // Sanity anchor from the command-code@1.56.0 snapshot plus the two
+    // docs-verified additions (glm-5.3-flashx, LongCat-2.0): go < goat < pro < max.
     assert.deepEqual(expected, {
-      go: 45,
-      goat: 51,
-      pro: 64,
+      go: 47,
+      goat: 53,
+      pro: 66,
       max: Object.keys(MODEL_MIN_PLAN).length,
     })
 

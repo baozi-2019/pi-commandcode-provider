@@ -55,6 +55,21 @@ describe("normalizePlanId()", () => {
     assert.equal(normalizePlanId("team-pro"), "pro")
   })
 
+  it("resolves prefixed billing ids by whole token, taking the lowest tier", () => {
+    assert.equal(normalizePlanId("individual-goat"), "goat")
+    assert.equal(normalizePlanId("individual-go"), "go")
+    assert.equal(normalizePlanId("Individual Pro Monthly"), "pro")
+    assert.equal(normalizePlanId("team-max"), "max")
+  })
+
+  it("never lets unknown prefixes or extra words elevate access", () => {
+    assert.equal(normalizePlanId("individual"), "unknown")
+    assert.equal(normalizePlanId("goatlike"), "unknown")
+    assert.equal(normalizePlanId("promo"), "unknown")
+    assert.equal(normalizePlanId("professional"), "unknown")
+    assert.equal(normalizePlanId("individual-goat-trial"), "goat")
+  })
+
   it("maps pay-as-you-go identifiers to provider", () => {
     assert.equal(normalizePlanId("provider"), "provider")
     assert.equal(normalizePlanId("pay as you go"), "provider")
