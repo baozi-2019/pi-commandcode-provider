@@ -37,7 +37,7 @@ export function registerCommandCodeQuota(
   const getConfiguredKey = options.getConfiguredKey ?? getConfiguredApiKey
   const fetchQuota = options.fetchQuota ?? fetchCommandCodeQuota
 
-  pi.registerCommand("commandcode-quota", {
+  pi.registerCommand("commandcode-usage", {
     description: "Show Command Code account usage and quota",
     handler: async (_args, ctx) => {
       await ctx.waitForIdle?.()

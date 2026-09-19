@@ -4,7 +4,8 @@
 
 ## 未发布
 
-- 重做 `/commandcode-quota` 输出：精简为 5 小时 / 周 / 月三条限额用量比例，以进度条（█/░）+ 百分比 + 已用/总额 + 重置/续订倒计时展示；移除 Credits 明细、Plan、Usage、Account 段落。
+- 斜杠命令 `/commandcode-quota` 更名为 `/commandcode-usage`，功能与输出不变；内部模块与标识符（quota.ts、registerCommandCodeQuota 等）保持原名。
+- 重做 `/commandcode-usage` 输出：精简为 5 小时 / 周 / 月三条限额用量比例，以进度条（█/░）+ 百分比 + 已用/总额 + 重置/续订倒计时展示；移除 Credits 明细、Plan、Usage、Account 段落。
 - 移除 `/commandcode-plan refresh` 子命令：套餐重识别统一由 `/commandcode-refresh` 承担（auto 模式下刷新模型目录前会强制重识别套餐），`/commandcode-plan` 只保留查看与 `auto|go|goat|pro|max` 设置。
 - 修复套餐自动识别失败：线上 `/alpha/billing/subscriptions` 返回的 `planId` 带前缀（如 `individual-goat`），`normalizePlanId` 仅做整串精确匹配导致识别为 `unknown` 并 fail-closed 到 Go 档；改为按分隔符切分后整词匹配（多命中取最低档），保持未知标识不提升权限的不变量。
 - 模型最低套餐快照补充 `z-ai/glm-5.3-flashx` 与 `meituan/LongCat-2.0`（均为 go 档，依据 commandcode.ai/docs 的 Go/GOAT 套餐页核对，Go 档 46 款与文档计数一致）；此前两个线上模型因快照缺失被 fail-closed 隐藏。

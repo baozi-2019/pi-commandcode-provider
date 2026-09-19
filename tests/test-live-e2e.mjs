@@ -313,7 +313,7 @@ try {
         event.message.includes("source:"),
     )
 
-    send({ id: "quota", type: "prompt", message: "/commandcode-quota" })
+    send({ id: "quota", type: "prompt", message: "/commandcode-usage" })
     await waitFor((event) => event.type === "response" && event.id === "quota" && event.success)
     const quota = await waitFor(
       (event) =>
@@ -332,7 +332,7 @@ try {
   })
   assert.ok(runtime.names.includes("commandcode-refresh"))
   assert.ok(runtime.names.includes("commandcode-status"))
-  assert.ok(runtime.names.includes("commandcode-quota"))
+  assert.ok(runtime.names.includes("commandcode-usage"))
   assert.match(runtime.refresh, /model catalog (?:refreshed|unchanged)/)
   if (expectedTransport) assert.match(runtime.status, new RegExp(`transport: ${expectedTransport}`))
   assert.match(runtime.status, /source: (?:live|cache)/)

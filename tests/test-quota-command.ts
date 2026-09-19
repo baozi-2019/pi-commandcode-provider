@@ -14,7 +14,7 @@ class CommandApiDouble {
       handler: (args: string, ctx: QuotaCommandContext) => Promise<void>
     },
   ): void {
-    assert.equal(name, "commandcode-quota")
+    assert.equal(name, "commandcode-usage")
     assert.match(options.description, /usage and quota/)
     this.handler = options.handler
   }
@@ -52,7 +52,7 @@ const quotaResult: CommandCodeQuotaResult = {
   },
 }
 
-describe("commandcode-quota command", () => {
+describe("commandcode-usage command", () => {
   it("registers the command and resolves OMP placeholders through the fallback key", async () => {
     const pi = new CommandApiDouble()
     let requestKey = ""

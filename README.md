@@ -97,7 +97,7 @@ pi -p "hello" --model commandcode/deepseek/deepseek-v4-flash
 | `/commandcode-plan [auto\|go\|goat\|pro\|max]` | 查看或修改当前 key 的套餐策略，修改后立即刷新模型列表             |
 | `/commandcode-refresh`                         | 刷新动态模型目录；auto 模式同时重识别套餐；失败保留上次可用目录   |
 | `/commandcode-status`                          | 脱敏诊断：transport、目录来源/数量、plan 来源、过滤计数、缓存路径 |
-| `/commandcode-quota`                           | 5 小时 / 周 / 月限额用量比例（进度条展示）                        |
+| `/commandcode-usage`                           | 5 小时 / 周 / 月限额用量比例（进度条展示）                        |
 
 ## 环境变量
 
