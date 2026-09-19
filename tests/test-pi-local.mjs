@@ -658,7 +658,7 @@ async function runRpcPlanCommands(timeoutMs = 30_000) {
         event.type === "extension_ui_request" &&
         event.method === "notify" &&
         typeof event.message === "string" &&
-        event.message.includes("plan source: environment"),
+        event.message.includes("Usage:"),
       fromRefresh,
     )
 
@@ -1229,7 +1229,7 @@ try {
   const planCommands = await runRpcPlanCommands()
   assert.match(planCommands.show, /plan: /)
   assert.match(planCommands.goat, /plan: goat/)
-  assert.match(planCommands.refresh, /plan: max/)
+  assert.match(planCommands.refresh, /Usage: \/commandcode-plan \[auto\|go\|goat\|pro\|max\]/)
   assert.match(planCommands.bogus, /Usage:/)
   assert.doesNotMatch(
     `${planCommands.show}\n${planCommands.goat}\n${planCommands.refresh}\n${planCommands.stderr}`,

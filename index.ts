@@ -295,7 +295,7 @@ export default async function (pi: ExtensionAPI) {
         return
       }
 
-      if (value === "refresh" || value === "auto") {
+      if (value === "auto") {
         await refreshPlan(undefined, true)
       } else if (isSubscriptionPlan(value)) {
         const apiKey = getConfiguredApiKey()
@@ -306,7 +306,7 @@ export default async function (pi: ExtensionAPI) {
         )
         planWarning = undefined
       } else {
-        ctx.ui.notify("Usage: /commandcode-plan [auto|go|goat|pro|max|refresh]", "warning")
+        ctx.ui.notify("Usage: /commandcode-plan [auto|go|goat|pro|max]", "warning")
         return
       }
 

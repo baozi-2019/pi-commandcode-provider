@@ -39,7 +39,7 @@ pi remove git:github.com/baozi-2019/pi-commandcode-provider
 /commandcode-plan            # 查看当前套餐、来源、识别时间
 /commandcode-plan auto       # 恢复自动识别
 /commandcode-plan go|goat|pro|max   # 为当前 key 手动绑定套餐
-/commandcode-plan refresh    # 强制重新自动识别
+/commandcode-refresh         # 重新拉取模型目录并强制重识别套餐
 ```
 
 手动绑定只对当前 key 指纹生效，换 key 不会继承。按量付费的 Provider API key 会被识别为 `provider` 档位，不限制模型。
@@ -92,12 +92,12 @@ pi -p "hello" --model commandcode/deepseek/deepseek-v4-flash
 
 ## 命令
 
-| 命令                                                    | 作用                                                              |
-| ------------------------------------------------------- | ----------------------------------------------------------------- |
-| `/commandcode-plan [auto\|go\|goat\|pro\|max\|refresh]` | 查看或修改当前 key 的套餐策略，修改后立即刷新模型列表             |
-| `/commandcode-refresh`                                  | 刷新动态模型目录；auto 模式同时重识别套餐；失败保留上次可用目录   |
-| `/commandcode-status`                                   | 脱敏诊断：transport、目录来源/数量、plan 来源、过滤计数、缓存路径 |
-| `/commandcode-quota`                                    | 账户 credits、订阅、用量与 5 小时/周滚动窗口                      |
+| 命令                                           | 作用                                                              |
+| ---------------------------------------------- | ----------------------------------------------------------------- |
+| `/commandcode-plan [auto\|go\|goat\|pro\|max]` | 查看或修改当前 key 的套餐策略，修改后立即刷新模型列表             |
+| `/commandcode-refresh`                         | 刷新动态模型目录；auto 模式同时重识别套餐；失败保留上次可用目录   |
+| `/commandcode-status`                          | 脱敏诊断：transport、目录来源/数量、plan 来源、过滤计数、缓存路径 |
+| `/commandcode-quota`                           | 账户 credits、订阅、用量与 5 小时/周滚动窗口                      |
 
 ## 环境变量
 

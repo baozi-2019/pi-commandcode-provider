@@ -4,6 +4,7 @@
 
 ## 未发布
 
+- 移除 `/commandcode-plan refresh` 子命令：套餐重识别统一由 `/commandcode-refresh` 承担（auto 模式下刷新模型目录前会强制重识别套餐），`/commandcode-plan` 只保留查看与 `auto|go|goat|pro|max` 设置。
 - 修复套餐自动识别失败：线上 `/alpha/billing/subscriptions` 返回的 `planId` 带前缀（如 `individual-goat`），`normalizePlanId` 仅做整串精确匹配导致识别为 `unknown` 并 fail-closed 到 Go 档；改为按分隔符切分后整词匹配（多命中取最低档），保持未知标识不提升权限的不变量。
 - 模型最低套餐快照补充 `z-ai/glm-5.3-flashx` 与 `meituan/LongCat-2.0`（均为 go 档，依据 commandcode.ai/docs 的 Go/GOAT 套餐页核对，Go 档 46 款与文档计数一致）；此前两个线上模型因快照缺失被 fail-closed 隐藏。
 - 修复 `/commandcode-plan refresh|auto` 与 `/commandcode-refresh` 前置套餐刷新崩溃：`refreshPlan(true)` 将 `true` 误传给 apiKey 参数（签名为 `(apiKey, force)`），导致 sha256 指纹计算抛出 “data argument must be of type string … Received type boolean (true)”，套餐识别失败后无法手动恢复；改为 `refreshPlan(undefined, true)` 并补 pi-local 回归用例。
