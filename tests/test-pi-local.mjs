@@ -201,13 +201,12 @@ const server = createServer((req, res) => {
       "Content-Type": "text/event-stream; charset=utf-8",
       "Transfer-Encoding": "chunked",
     })
-    const text = overflowMode
-      ? overflowRequestCount === 1
-        ? "overflow-initial"
-        : overflowRequestCount === 3
-          ? "compaction-summary"
-          : "overflow-recovered"
-      : "mock-pi-ok"
+    let text = "mock-pi-ok"
+    if (overflowMode) {
+      if (overflowRequestCount === 1) text = "overflow-initial"
+      else if (overflowRequestCount === 3) text = "compaction-summary"
+      else text = "overflow-recovered"
+    }
     if (isAnthropicRequest) {
       res.write(
         `event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { id: "mock", type: "message", role: "assistant", content: [], model: CLAUDE_TEST_MODEL, stop_reason: null, stop_sequence: null, usage: { input_tokens: 1, output_tokens: 0 } } })}\n\n`,
@@ -649,6 +648,20 @@ async function runRpcPlanCommands(timeoutMs = 30_000) {
       fromGoat,
     )
 
+    const fromRefresh = events.length
+    send({ id: "plan-refresh", type: "prompt", message: "/commandcode-plan refresh" })
+    await waitFor(
+      (event) => event.type === "response" && event.id === "plan-refresh" && event.success,
+    )
+    const refresh = await waitFor(
+      (event) =>
+        event.type === "extension_ui_request" &&
+        event.method === "notify" &&
+        typeof event.message === "string" &&
+        event.message.includes("plan source: environment"),
+      fromRefresh,
+    )
+
     const fromBogus = events.length
     send({ id: "plan-bogus", type: "prompt", message: "/commandcode-plan bogus" })
     await waitFor(
@@ -663,7 +676,13 @@ async function runRpcPlanCommands(timeoutMs = 30_000) {
       fromBogus,
     )
 
-    return { show: show.message, goat: goat.message, bogus: bogus.message, stderr }
+    return {
+      show: show.message,
+      goat: goat.message,
+      refresh: refresh.message,
+      bogus: bogus.message,
+      stderr,
+    }
   } finally {
     child.kill()
   }
@@ -1210,9 +1229,10 @@ try {
   const planCommands = await runRpcPlanCommands()
   assert.match(planCommands.show, /plan: /)
   assert.match(planCommands.goat, /plan: goat/)
+  assert.match(planCommands.refresh, /plan: max/)
   assert.match(planCommands.bogus, /Usage:/)
   assert.doesNotMatch(
-    `${planCommands.show}\n${planCommands.goat}\n${planCommands.stderr}`,
+    `${planCommands.show}\n${planCommands.goat}\n${planCommands.refresh}\n${planCommands.stderr}`,
     /mock-key/,
   )
 

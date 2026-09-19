@@ -279,7 +279,7 @@ export default async function (pi: ExtensionAPI) {
     getTransport: transport.getTransport,
     getPlanStatus: () => formatPlanResolution(planResolution),
     beforeRefresh: async () => {
-      if (planResolution.mode === "auto") await refreshPlan(true)
+      if (planResolution.mode === "auto") await refreshPlan(undefined, true)
     },
   })
 
@@ -296,7 +296,7 @@ export default async function (pi: ExtensionAPI) {
       }
 
       if (value === "refresh" || value === "auto") {
-        await refreshPlan(true)
+        await refreshPlan(undefined, true)
       } else if (isSubscriptionPlan(value)) {
         const apiKey = getConfiguredApiKey()
         planResolution = await saveManualCommandCodePlan(
