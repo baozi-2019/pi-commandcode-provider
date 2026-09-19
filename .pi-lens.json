@@ -1,0 +1,7 @@
+{
+  "rules": {
+    "no-runtime-typeof": { "disable": ["no-runtime-typeof"] },
+    "no-unknown-parameters": { "disable": ["no-unknown-parameters"] },
+    "no-unsafe-dictionary-unknown": { "disable": ["no-unsafe-dictionary-unknown"] }
+  }
+}

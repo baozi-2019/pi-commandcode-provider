@@ -1,5 +1,4 @@
 import type {
-  AssistantMessageEvent,
   AssistantMessageEventStreamLike,
   ContextLike,
   ModelLike,
