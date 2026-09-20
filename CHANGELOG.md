@@ -4,6 +4,7 @@
 
 ## 未发布
 
+- 修复交互模式 `/commandcode-usage` 配额表过暗：pi 将 info 通知渲染为主题 dim 前景，现于消息开头注入 SGR 39 前景重置码，pi-tui 解析后回落到终端默认前景色（深浅色终端均适配）；文本内容与格式不变。
 - 斜杠命令 `/commandcode-quota` 更名为 `/commandcode-usage`，功能与输出不变；内部模块与标识符（quota.ts、registerCommandCodeQuota 等）保持原名。
 - 重做 `/commandcode-usage` 输出：精简为 5 小时 / 周 / 月三条限额用量比例，以进度条（█/░）+ 百分比 + 已用/总额 + 重置/续订倒计时展示；移除 Credits 明细、Plan、Usage、Account 段落。
 - 移除 `/commandcode-plan refresh` 子命令：套餐重识别统一由 `/commandcode-refresh` 承担（auto 模式下刷新模型目录前会强制重识别套餐），`/commandcode-plan` 只保留查看与 `auto|go|goat|pro|max` 设置。

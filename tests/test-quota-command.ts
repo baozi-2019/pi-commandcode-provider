@@ -75,6 +75,8 @@ describe("commandcode-usage command", () => {
     assert.equal(requestBase, "https://api.commandcode.ai")
     assert.equal(ctx.notifications.at(-1)?.type, "info")
     assert.match(ctx.notifications.at(-1)?.message ?? "", /Monthly \$1\.00 used/)
+    // pi renders info notifications dim; the command prefixes an SGR 39 reset to keep the table bright.
+    assert.equal(ctx.notifications.at(-1)?.message.startsWith("\u001b[39m"), true)
   })
 
   it("warns without calling the endpoint when no API key is available", async () => {

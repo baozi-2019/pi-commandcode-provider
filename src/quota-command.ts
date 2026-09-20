@@ -3,6 +3,14 @@ import { pickCommandCodeApiKey } from "./converters.ts"
 import { fetchCommandCodeQuota, redactValue } from "./quota.ts"
 import { formatQuota } from "./quota-format.ts"
 
+/**
+ * pi renders `info` notifications with the theme's dim foreground, which made the
+ * quota table hard to read. pi-tui's ANSI parser maps SGR 39 to "default
+ * foreground", so prefixing this reset renders the table at the terminal's
+ * normal text brightness in both dark and light themes.
+ */
+const DEFAULT_FOREGROUND = "\u001b[39m"
+
 export interface QuotaCommandContext {
   waitForIdle?: () => Promise<void>
   modelRegistry?: {
@@ -60,7 +68,7 @@ export function registerCommandCodeQuota(
         ctx.ui.notify(redactValue(result.error.message), "error")
         return
       }
-      ctx.ui.notify(formatQuota(result.quota), "info")
+      ctx.ui.notify(`${DEFAULT_FOREGROUND}${formatQuota(result.quota)}`, "info")
     },
   })
 }
