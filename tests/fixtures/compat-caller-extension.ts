@@ -7,9 +7,8 @@
  * optional pi peer packages; the host's extension loader resolves the import.
  */
 
-// pi resolves this optional peer package at load time; it is intentionally not
-// installed for typechecking, so suppress the unresolved-module error.
-// @ts-ignore peer package resolved by the host at load time.
+// pi resolves this optional peer package at load time; its type face comes from
+// types/peer-shims.d.ts, so the import typechecks without installing the package.
 import * as compatModule from "@earendil-works/pi-ai/compat"
 
 interface CompatTextPart {

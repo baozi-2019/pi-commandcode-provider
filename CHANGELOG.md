@@ -4,6 +4,7 @@
 
 ## 未发布
 
+- `index.ts` 纳入 typecheck 与 LSP 覆盖：tsconfig include 加入 `index.ts` 与 `types/**/*.d.ts`，新增窄化 ambient shim `types/peer-shims.d.ts` 提供 peer 包类型面（签名按宿主 pi d.ts 手动同步，升级需 resync），`ModelLike` 补 `compat?/compatConfig?` 可选字段，移除 fixture 失效 `@ts-ignore`，等价重构 index.ts 嵌套三元；全仓 typecheck 与 LSP 0 error，peer 运行时包仍不安装、manifest 不变量不变。
 - 修复交互模式 `/commandcode-usage` 配额表过暗：pi 将 info 通知渲染为主题 dim 前景，现于消息开头注入 SGR 39 前景重置码，pi-tui 解析后回落到终端默认前景色（深浅色终端均适配）；文本内容与格式不变。
 - 斜杠命令 `/commandcode-quota` 更名为 `/commandcode-usage`，功能与输出不变；内部模块与标识符（quota.ts、registerCommandCodeQuota 等）保持原名。
 - 重做 `/commandcode-usage` 输出：精简为 5 小时 / 周 / 月三条限额用量比例，以进度条（█/░）+ 百分比 + 已用/总额 + 重置/续订倒计时展示；移除 Credits 明细、Plan、Usage、Account 段落。

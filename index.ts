@@ -105,6 +105,32 @@ function commandCodeHeaders(): Record<string, string> | undefined {
   return undefined
 }
 
+/** Host compat overrides per upstream api family; forwarded to `streamSimple` opaquely. */
+function compatForModel(model: CommandCodeModel): Record<string, unknown> {
+  if (model.api === "openai-completions") {
+    return {
+      supportsStore: false,
+      supportsDeveloperRole: false,
+      supportsReasoningEffort: MODEL_EFFORTS[model.id] !== undefined,
+      maxTokensField: "max_tokens",
+    }
+  }
+  const compat: {
+    supportsEagerToolInputStreaming: boolean
+    supportsLongCacheRetention: boolean
+    supportsCacheControlOnTools: boolean
+    supportsToolReferences: boolean
+    forceAdaptiveThinking?: boolean
+  } = {
+    supportsEagerToolInputStreaming: false,
+    supportsLongCacheRetention: false,
+    supportsCacheControlOnTools: false,
+    supportsToolReferences: false,
+  }
+  if (model.reasoning) compat.forceAdaptiveThinking = true
+  return compat
+}
+
 function createProviderConfig(
   models: readonly CommandCodeModel[],
   apiBase: string,
@@ -137,21 +163,7 @@ function createProviderConfig(
       contextWindow: model.contextWindow,
       maxTokens: model.maxTokens,
       headers,
-      compat:
-        model.api === "openai-completions"
-          ? {
-              supportsStore: false,
-              supportsDeveloperRole: false,
-              supportsReasoningEffort: MODEL_EFFORTS[model.id] !== undefined,
-              maxTokensField: "max_tokens",
-            }
-          : {
-              supportsEagerToolInputStreaming: false,
-              supportsLongCacheRetention: false,
-              supportsCacheControlOnTools: false,
-              supportsToolReferences: false,
-              ...(model.reasoning ? { forceAdaptiveThinking: true } : {}),
-            },
+      compat: compatForModel(model),
     })),
   }
 }

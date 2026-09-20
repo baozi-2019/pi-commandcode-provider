@@ -81,6 +81,10 @@ export interface ModelLike {
     effortMap?: Partial<Record<string, string>>
     efforts?: readonly string[]
   }
+  /** Host compat overrides, forwarded to `streamSimple` opaquely. */
+  compat?: unknown
+  /** Legacy alias some hosts use for `compat`. */
+  compatConfig?: unknown
 }
 
 export interface MessageLike {
