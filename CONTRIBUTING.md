@@ -6,7 +6,7 @@
 npm install
 ```
 
-要求 Node.js ≥ 22（与官方 `command-code` CLI 一致）。`@earendil-works/pi-ai` 与 `@earendil-works/pi-coding-agent` 是宿主 pi 打包提供的可选 peer 包，本仓库**不安装**它们——`tests/test-package-manifest.ts` 会校验它们没有出现在 `dependencies`/`devDependencies` 中。入口 `index.ts` 在 `tsconfig.json` 的 include 中，peer 包类型由 `types/peer-shims.d.ts` 的窄化 ambient shim 提供（宿主 pi 升级时按其 d.ts 手动同步签名），运行时包仍不安装、由宿主加载期解析；`npm run typecheck` 覆盖 `index.ts`、`src/` 与 `tests/`。
+要求 Node.js ≥ 22（与官方 `command-code` CLI 一致）。`@earendil-works/pi-ai`、`@earendil-works/pi-coding-agent` 与 `@earendil-works/pi-tui` 是宿主 pi 打包提供的可选 peer 包，本仓库**不安装**它们——`tests/test-package-manifest.ts` 会校验它们没有出现在 `dependencies`/`devDependencies` 中。入口 `index.ts` 在 `tsconfig.json` 的 include 中，peer 包类型由 `types/peer-shims.d.ts` 的窄化 ambient shim 提供（宿主 pi 升级时按其 d.ts 手动同步签名），运行时包仍不安装、由宿主加载期解析；`npm run typecheck` 覆盖 `index.ts`、`src/` 与 `tests/`。
 
 ## 常用命令
 

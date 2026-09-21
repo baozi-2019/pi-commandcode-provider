@@ -14,6 +14,7 @@ import {
   type ExtensionCommandContext,
   type ProviderConfig,
 } from "@earendil-works/pi-coding-agent"
+import { Box, Text } from "@earendil-works/pi-tui"
 import { join } from "node:path"
 
 import { getConfiguredApiKey } from "./src/api-key.ts"
@@ -43,7 +44,7 @@ import {
 } from "./src/plan-resolver.ts"
 import { isSubscriptionPlan, type PlanResolution, type SubscriptionPlan } from "./src/plan-types.ts"
 import { MODEL_COSTS, ZERO_MODEL_COST } from "./src/pricing.ts"
-import { registerCommandCodeQuota } from "./src/quota-command.ts"
+import { QUOTA_ENTRY_TYPE, registerCommandCodeQuota } from "./src/quota-command.ts"
 import { createCommandCodeRuntime } from "./src/runtime.ts"
 import { createCommandCodeTransportRouter } from "./src/transport.ts"
 
@@ -257,6 +258,16 @@ export default async function (pi: ExtensionAPI) {
     if (event.message.role !== "assistant") return
     const normalized = normalizeCommandCodeMessage(event.message, ctx.model?.provider)
     return normalized ? { message: normalized.message } : undefined
+  })
+
+  pi.registerEntryRenderer(QUOTA_ENTRY_TYPE, (entry, _options, theme) => {
+    const data = entry.data as { content?: unknown } | undefined
+    const text = typeof data?.content === "string" ? data.content : JSON.stringify(data)
+    // Box with customMessageBg renders the usage as a durable card in the
+    // transcript, consistent with pi's own custom-entry styling.
+    const box = new Box(1, 1, (line) => theme.bg("customMessageBg", line))
+    box.addChild(new Text(text, 0, 0))
+    return box
   })
 
   registerCommandCodeQuota(pi, {

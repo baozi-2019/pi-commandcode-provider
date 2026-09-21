@@ -5,7 +5,8 @@
  * narrowed to the `src/types.ts`/`src/oauth.ts` contracts `index.ts` bridges; the wider
  * host d.ts (`Model<Api>`, `TranscriptContext` brand) is not assignable to them.
  * Snapshot taken against host pi: @earendil-works/pi-coding-agent 0.86.0 (bundles
- * @earendil-works/pi-ai 0.86.0); resync the used face from the host d.ts on upgrade.
+ * @earendil-works/pi-ai 0.86.0 and @earendil-works/pi-tui 0.86.0); resync the used
+ * face from the host d.ts on upgrade.
  */
 
 type T = typeof import("../src/types.ts")
@@ -46,16 +47,26 @@ declare module "@earendil-works/pi-coding-agent" {
 
   /** `Model<Api>` via `ExtensionContext.model` / `ModelRegistry.find()`. */
   export type ExtensionModel = { id: string; provider: string; api: string }
+  export type ExtensionMode = "tui" | "rpc" | "json" | "print"
   export type ExtensionModelRegistry = {
     find(provider: string, modelId: string): ExtensionModel | undefined
     getApiKeyForProvider(provider: string): Promise<string | undefined>
   }
   export type ExtensionContext = {
+    mode: ExtensionMode
+    hasUI: boolean
     ui: { notify(message: string, type?: "info" | "warning" | "error"): void }
     modelRegistry: ExtensionModelRegistry
     model: ExtensionModel | undefined
   }
   export type ExtensionCommandContext = ExtensionContext & { waitForIdle(): Promise<void> }
+
+  /** Host `EntryRenderer<T>` narrowed to the plain-data face `index.ts` renders. */
+  export type EntryRenderer = (
+    entry: { data?: unknown },
+    options: { expanded: boolean },
+    theme: { bg(color: string, text: string): string },
+  ) => unknown
 
   /** `AgentMessage` assistant member, narrowed to what `src/overflow.ts` reads. */
   export interface AssistantMessage {
@@ -117,6 +128,26 @@ declare module "@earendil-works/pi-coding-agent" {
     on(event: "session_shutdown", handler: Handler<SessionShutdownEvent>): () => void
     registerCommand(name: string, options: RegisteredCommandOptions): void
     registerProvider(name: string, config: ProviderConfig): void
+    registerEntryRenderer(customType: string, renderer: EntryRenderer): void
+    appendEntry<T = unknown>(customType: string, data?: T): void
     setModel(model: ExtensionModel): Promise<boolean>
+  }
+}
+
+declare module "@earendil-works/pi-tui" {
+  /** Host `Box implements Component`; only the construction face `index.ts` uses. */
+  export class Box {
+    constructor(paddingX?: number, paddingY?: number, bgFn?: (text: string) => string)
+    addChild(component: unknown): void
+  }
+
+  /** Host `Text implements Component`; only the construction face `index.ts` uses. */
+  export class Text {
+    constructor(
+      text?: string,
+      paddingX?: number,
+      paddingY?: number,
+      customBgFn?: (text: string) => string,
+    )
   }
 }

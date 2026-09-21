@@ -5,7 +5,7 @@ obsidian-project: pi-commandcode-provider
 ## 工程事实
 
 - 本工程是 pi 的 Command Code provider 扩展，fork 自 patlux/pi-commandcode-provider（MIT，v0.7.0），新增套餐感知模型过滤。
-- 运行时复用宿主 pi 打包的核心包：`@earendil-works/pi-ai` 与 `@earendil-works/pi-coding-agent` 只能以 optional peerDependencies 声明，禁止写入 `dependencies`/`devDependencies`（`tests/test-package-manifest.ts` 会校验）。
+- 运行时复用宿主 pi 打包的核心包：`@earendil-works/pi-ai`、`@earendil-works/pi-coding-agent` 与 `@earendil-works/pi-tui` 只能以 optional peerDependencies 声明，禁止写入 `dependencies`/`devDependencies`（`tests/test-package-manifest.ts` 会校验）。
 - 入口 `index.ts` 在 `tsconfig.json` 的 include 中；peer 包类型由 `types/peer-shims.d.ts` 窄化 shim 提供（签名按宿主 pi d.ts 手动同步），运行时包仍由宿主 pi 加载期解析、本仓库不安装；`npm run typecheck` 覆盖 `index.ts`、`src/` 与 `tests/`。
 - 模型能力快照（`src/commandcode-catalog.ts`）与最低套餐快照（`src/commandcode-plan-catalog.ts`）按上游 `command-code` CLI 目录手动刷新，刷新方法见 CONTRIBUTING.md。
 - 模型最低套餐元数据快照在 `src/commandcode-plan-catalog.ts`（command-code@1.56.0），上游目录变化时需同步。

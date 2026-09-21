@@ -9,7 +9,11 @@ interface PackageManifest {
   peerDependenciesMeta?: Record<string, { optional?: boolean }>
 }
 
-const CORE_PEERS = ["@earendil-works/pi-ai", "@earendil-works/pi-coding-agent"] as const
+const CORE_PEERS = [
+  "@earendil-works/pi-ai",
+  "@earendil-works/pi-coding-agent",
+  "@earendil-works/pi-tui",
+] as const
 
 async function readPackageManifest(): Promise<PackageManifest> {
   const contents = await readFile(new URL("../package.json", import.meta.url), "utf-8")

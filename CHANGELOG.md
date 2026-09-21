@@ -4,6 +4,8 @@
 
 ## 未发布
 
+- `/commandcode-usage` 输出通道对齐 pi-kimi-usage 四通道矩阵：TUI 的 info 改为 `appendEntry` 持久卡片（`index.ts` 注册 `registerEntryRenderer`，`customMessageBg` 渲染，不再被流式输出顶起，SGR 39 亮度 hack 随之退役）；warning/error 维持 `ui.notify`；print 模式输出 stdout、json 模式输出 stderr——此前无 UI 模式下 `ui.notify` 为宿主 no-op，命令零输出；新增 `@earendil-works/pi-tui` optional peer 与对应 shim 类型面，运行中立即返回的行为不变。
+- `/commandcode-usage` 不再等待 agent 空闲：pi 对扩展命令本就立即执行（streaming 期间亦然），此前 handler 首行 `await ctx.waitForIdle?.()` 导致运行中输入命令也要等任务结束才显示配额；该 handler 只读取配额并弹通知，移除等待后 agent 运行中输入立即返回用量（通知 toast 可能被流式输出顶起，属预期现象）。
 - `index.ts` 纳入 typecheck 与 LSP 覆盖：tsconfig include 加入 `index.ts` 与 `types/**/*.d.ts`，新增窄化 ambient shim `types/peer-shims.d.ts` 提供 peer 包类型面（签名按宿主 pi d.ts 手动同步，升级需 resync），`ModelLike` 补 `compat?/compatConfig?` 可选字段，移除 fixture 失效 `@ts-ignore`，等价重构 index.ts 嵌套三元；全仓 typecheck 与 LSP 0 error，peer 运行时包仍不安装、manifest 不变量不变。
 - 修复交互模式 `/commandcode-usage` 配额表过暗：pi 将 info 通知渲染为主题 dim 前景，现于消息开头注入 SGR 39 前景重置码，pi-tui 解析后回落到终端默认前景色（深浅色终端均适配）；文本内容与格式不变。
 - 斜杠命令 `/commandcode-quota` 更名为 `/commandcode-usage`，功能与输出不变；内部模块与标识符（quota.ts、registerCommandCodeQuota 等）保持原名。
