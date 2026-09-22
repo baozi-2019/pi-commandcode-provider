@@ -1152,13 +1152,11 @@ try {
 
   console.log("[pi-local] forward image input through the documented provider schema")
   requestCount = 0
-  // Host pi ≥ 0.87.0 decodes images before forwarding (Photon WASM); a bare
-  // PNG signature no longer survives, so use a valid 1x1 transparent PNG.
   const imageRpc = await runRpcQuery(10_000, "describe image", [], {
     images: [
       {
         type: "image",
-        data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+        data: "iVBORw0KGgo=",
         mimeType: "image/png",
       },
     ],
