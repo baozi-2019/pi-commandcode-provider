@@ -1,11 +1,11 @@
 /**
- * Generated from command-code@1.56.0 reference/models.md.
+ * Generated from command-code@1.62.0 reference/models.md.
  * Update with the upstream model reference before changing this snapshot.
  */
 
 import type { SubscriptionPlan } from "./plan-types.ts"
 
-export const COMMAND_CODE_MODEL_CATALOG_VERSION = "1.56.0"
+export const COMMAND_CODE_MODEL_CATALOG_VERSION = "1.62.0"
 
 export const MODEL_MIN_PLAN: Readonly<Record<string, SubscriptionPlan>> = {
   "MiniMaxAI/MiniMax-M2.5": "go",
@@ -50,7 +50,6 @@ export const MODEL_MIN_PLAN: Readonly<Record<string, SubscriptionPlan>> = {
   "gpt-6-astra": "max",
   "inclusionai/ling-3.0-flash-sante:free": "go",
   "meituan/LongCat-2.0": "go",
-  "meituan/LongCat-2.0:free": "go",
   "meta/muse-spark-1.1": "pro",
   "meta/muse-spark-1.2": "goat",
   "meta/muse-spark-1.2-contributor": "go",
@@ -66,14 +65,19 @@ export const MODEL_MIN_PLAN: Readonly<Record<string, SubscriptionPlan>> = {
   "sakana/fugu-ultra": "max",
   "stepfun/Step-3.5-Flash": "go",
   "stepfun/Step-3.7-Flash": "go",
+  "stepfun/Step-5-Preview": "go",
   "tencent/hy3-paid": "go",
   "tencent/hy4-preview": "go",
   "thinkingmachines/inkling": "go",
   "thinkingmachines/inkling-small": "go",
   "xai/grok-4.5": "go",
   "xai/grok-4.6": "goat",
+  "xai/grok-4.7": "goat",
   "xiaomi/mimo-v2.5": "go",
   "xiaomi/mimo-v2.5-pro": "go",
+  "xiaomi/mimo-v2.6-flash": "go",
+  "xiaomi/mimo-v2.6-pro": "go",
+  "xiaomi/mimo-v2.6-pro-ultraspeed": "goat",
   "z-ai/glm-5.3-flash": "go",
   "z-ai/glm-5.3-flashx": "go",
   "zai-org/GLM-5": "go",

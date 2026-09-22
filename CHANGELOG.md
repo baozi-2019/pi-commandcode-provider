@@ -4,6 +4,8 @@
 
 ## 未发布
 
+- 模型最低套餐快照按上游 `command-code@1.62.0` 的 `reference/models.md` 整体重新生成（77 个模型：Go 49 / GOAT 8 / Pro 13 / Max 7）：补录线上新增且此前被 fail-closed 隐藏的 5 款模型（`xai/grok-4.7`、`xiaomi/mimo-v2.6-pro-ultraspeed` 为 goat，`xiaomi/mimo-v2.6-pro`、`xiaomi/mimo-v2.6-flash`、`stepfun/Step-5-Preview` 为 go），同步删除上游已移除的 `meituan/LongCat-2.0:free`；消除每次会话启动的「N model(s) hidden because their minimum plan is unknown」提示，`/commandcode-refresh` 本就无法消除该提示（套餐快照是代码内静态表，非运行时获取）。
+- 修复 pi-local 图片转发用例在宿主 pi 0.87.0 下的失败：宿主转发前会用 Photon WASM 解码图片，仅含 PNG 文件头的 9 字节伪图片夹具无法解码；改用有效的 1x1 透明 PNG，断言目标不变。
 - `/commandcode-usage` 输出通道对齐 pi-kimi-usage 四通道矩阵：TUI 的 info 改为 `appendEntry` 持久卡片（`index.ts` 注册 `registerEntryRenderer`，`customMessageBg` 渲染，不再被流式输出顶起，SGR 39 亮度 hack 随之退役）；warning/error 维持 `ui.notify`；print 模式输出 stdout、json 模式输出 stderr——此前无 UI 模式下 `ui.notify` 为宿主 no-op，命令零输出；新增 `@earendil-works/pi-tui` optional peer 与对应 shim 类型面，运行中立即返回的行为不变。
 - `/commandcode-usage` 不再等待 agent 空闲：pi 对扩展命令本就立即执行（streaming 期间亦然），此前 handler 首行 `await ctx.waitForIdle?.()` 导致运行中输入命令也要等任务结束才显示配额；该 handler 只读取配额并弹通知，移除等待后 agent 运行中输入立即返回用量（通知 toast 可能被流式输出顶起，属预期现象）。
 - `index.ts` 纳入 typecheck 与 LSP 覆盖：tsconfig include 加入 `index.ts` 与 `types/**/*.d.ts`，新增窄化 ambient shim `types/peer-shims.d.ts` 提供 peer 包类型面（签名按宿主 pi d.ts 手动同步，升级需 resync），`ModelLike` 补 `compat?/compatConfig?` 可选字段，移除 fixture 失效 `@ts-ignore`，等价重构 index.ts 嵌套三元；全仓 typecheck 与 LSP 0 error，peer 运行时包仍不安装、manifest 不变量不变。

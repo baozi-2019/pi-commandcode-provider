@@ -59,7 +59,7 @@ describe("MODEL_MIN_PLAN catalog", () => {
 })
 
 describe("filterCommandCodeModels()", () => {
-  it("exposes 45/51/64/71 models for go/goat/pro/max respectively", () => {
+  it("exposes the snapshot tier counts go < goat < pro < max", () => {
     const expected: Record<SubscriptionPlan, number> = {
       go: expectedCountAtOrBelow("go"),
       goat: expectedCountAtOrBelow("goat"),
@@ -67,12 +67,11 @@ describe("filterCommandCodeModels()", () => {
       max: expectedCountAtOrBelow("max"),
     }
 
-    // Sanity anchor from the command-code@1.56.0 snapshot plus the two
-    // docs-verified additions (glm-5.3-flashx, LongCat-2.0): go < goat < pro < max.
+    // Sanity anchor from the command-code@1.62.0 snapshot: go < goat < pro < max.
     assert.deepEqual(expected, {
-      go: 47,
-      goat: 53,
-      pro: 66,
+      go: 49,
+      goat: 57,
+      pro: 70,
       max: Object.keys(MODEL_MIN_PLAN).length,
     })
 
