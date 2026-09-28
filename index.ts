@@ -38,6 +38,15 @@ import { getApiKey as getOAuthApiKey, login, refreshToken } from "./src/oauth.ts
 import { normalizeCommandCodeMessage } from "./src/overflow.ts"
 import { assertCommandCodeModelAllowed, filterCommandCodeModels } from "./src/plan-policy.ts"
 import {
+  DEFAULT_PLAN_CATALOG_TIMEOUT_MS,
+  DEFAULT_PLAN_CATALOG_URL_TEMPLATE,
+  DEFAULT_PLAN_REGISTRY_URL,
+  readPlanCatalogCache,
+  refreshPlanCatalog,
+  usablePlanCatalogCache,
+} from "./src/plan-catalog-fetch.ts"
+import { COMMAND_CODE_MODEL_CATALOG_VERSION } from "./src/commandcode-plan-catalog.ts"
+import {
   formatPlanResolution,
   resolveCommandCodePlan,
   saveManualCommandCodePlan,
@@ -181,6 +190,11 @@ export default async function (pi: ExtensionAPI) {
     process.env.COMMANDCODE_MODELS_CACHE ?? join(getAgentDir(), "commandcode-models.json")
   const planCachePath =
     process.env.COMMANDCODE_PLAN_CACHE ?? join(getAgentDir(), "commandcode-plans.json")
+  const planCatalogCachePath =
+    process.env.COMMANDCODE_PLAN_CATALOG_CACHE ??
+    join(getAgentDir(), "commandcode-plan-catalog-cache.json")
+  const planCatalogTimeoutMs =
+    Number(process.env.COMMANDCODE_PLAN_CATALOG_TIMEOUT_MS) || DEFAULT_PLAN_CATALOG_TIMEOUT_MS
   const planApiBase = legacyApiBase(apiBase)
   let planResolution: PlanResolution = {
     plan: "unknown",
@@ -225,12 +239,30 @@ export default async function (pi: ExtensionAPI) {
     calculateCost: calculateCommandCodeCost,
     apiBase: legacyApiBase(apiBase),
   })
+  // Dynamic minimum-plan catalog: runtime-refreshed from the upstream
+  // command-code npm package; the bundled MODEL_MIN_PLAN snapshot is the
+  // offline floor. Cache older than the bundled snapshot is ignored so a stale
+  // file can never regress code-shipped metadata.
+  let dynamicPlanCatalog: Record<string, SubscriptionPlan> | undefined
+  let planCatalogStatus = `bundled ${COMMAND_CODE_MODEL_CATALOG_VERSION}`
+  const applyPlanCatalogOutcome = (outcome: {
+    source: string
+    catalogVersion?: string
+    entries?: Record<string, SubscriptionPlan>
+    warning?: string
+  }): string | undefined => {
+    if (outcome.entries) {
+      dynamicPlanCatalog = outcome.entries
+      planCatalogStatus = `${outcome.source} ${outcome.catalogVersion}`
+    }
+    return outcome.warning
+  }
   const resolveStreamOptions = (options?: Parameters<typeof streamNativeProvider>[2]) =>
     withResolvedCommandCodeApiKey(options, getConfiguredApiKey())
   const transport = createCommandCodeTransportRouter({
     createStream: () => new AssistantMessageEventStream(),
     streamProvider: (model, context, options) => {
-      assertCommandCodeModelAllowed(model.id, planResolution.plan)
+      assertCommandCodeModelAllowed(model.id, planResolution.plan, dynamicPlanCatalog)
       return streamNativeProvider(
         { ...model, api: apiForModelId(model.id), compat: model.compatConfig ?? model.compat },
         context,
@@ -238,7 +270,7 @@ export default async function (pi: ExtensionAPI) {
       )
     },
     streamGenerate: (model, context, options) => {
-      assertCommandCodeModelAllowed(model.id, planResolution.plan)
+      assertCommandCodeModelAllowed(model.id, planResolution.plan, dynamicPlanCatalog)
       return streamGenerate(model, context, resolveStreamOptions(options))
     },
   })
@@ -278,16 +310,34 @@ export default async function (pi: ExtensionAPI) {
   const runtime = createCommandCodeRuntime<ProviderConfig, ExtensionCommandContext>(pi, {
     endpoint: modelsUrl,
     cachePath: modelsCachePath,
-    loadModels: (signal) =>
-      loadCommandCodeModels({
-        url: modelsUrl,
-        cachePath: modelsCachePath,
-        timeoutMs: modelsTimeoutMs,
-        signal,
-      }),
+    loadModels: async (signal) => {
+      // Piggyback the dynamic plan-catalog refresh on every model catalog
+      // refresh (background startup and /commandcode-refresh alike).
+      const [outcome, models] = await Promise.all([
+        refreshPlanCatalog({
+          cachePath: planCatalogCachePath,
+          registryUrl: process.env.COMMANDCODE_PLAN_REGISTRY_URL ?? DEFAULT_PLAN_REGISTRY_URL,
+          catalogUrlTemplate:
+            process.env.COMMANDCODE_PLAN_CATALOG_URL ?? DEFAULT_PLAN_CATALOG_URL_TEMPLATE,
+          timeoutMs: planCatalogTimeoutMs,
+          signal,
+        }),
+        loadCommandCodeModels({
+          url: modelsUrl,
+          cachePath: modelsCachePath,
+          timeoutMs: modelsTimeoutMs,
+          signal,
+        }),
+      ])
+      const planCatalogWarning = applyPlanCatalogOutcome(outcome)
+      return {
+        ...models,
+        warning: [models.warning, planCatalogWarning].filter(Boolean).join(" ") || undefined,
+      }
+    },
     loadCachedModels: () => loadCachedCommandCodeModels(modelsCachePath),
     prepareModels: (models) => {
-      const filtered = filterCommandCodeModels(models, planResolution.plan)
+      const filtered = filterCommandCodeModels(models, planResolution.plan, dynamicPlanCatalog)
       const unknownWarning =
         filtered.unknownModelIds.length > 0
           ? `${filtered.unknownModelIds.length} model(s) hidden because their minimum plan is unknown`
@@ -301,6 +351,7 @@ export default async function (pi: ExtensionAPI) {
       createProviderConfig(models, apiBase, transport.stream, loginWithPlan),
     getTransport: transport.getTransport,
     getPlanStatus: () => formatPlanResolution(planResolution),
+    getPlanCatalogStatus: () => planCatalogStatus,
     beforeRefresh: async () => {
       if (planResolution.mode === "auto") await refreshPlan(undefined, true)
     },
@@ -341,6 +392,14 @@ export default async function (pi: ExtensionAPI) {
   pi.on("session_shutdown", () => {
     runtime.dispose()
   })
+
+  // Preload the dynamic plan catalog so the cached-models path in
+  // initialize() filters with the freshest known metadata.
+  const cachedPlanCatalog = usablePlanCatalogCache(await readPlanCatalogCache(planCatalogCachePath))
+  if (cachedPlanCatalog) {
+    dynamicPlanCatalog = cachedPlanCatalog.entries
+    planCatalogStatus = `cache ${cachedPlanCatalog.catalogVersion}`
+  }
 
   await runtime.initialize()
 }

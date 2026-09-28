@@ -95,28 +95,34 @@ pi -p "hello" --model commandcode/deepseek/deepseek-v4-flash
 | 命令                                           | 作用                                                                                                                    |
 | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | `/commandcode-plan [auto\|go\|goat\|pro\|max]` | 查看或修改当前 key 的套餐策略，修改后立即刷新模型列表                                                                   |
-| `/commandcode-refresh`                         | 刷新动态模型目录；auto 模式同时重识别套餐；失败保留上次可用目录                                                         |
-| `/commandcode-status`                          | 脱敏诊断：transport、目录来源/数量、plan 来源、过滤计数、缓存路径                                                       |
+| `/commandcode-refresh`                         | 刷新动态模型目录与动态套餐目录；auto 模式同时重识别套餐；失败保留上次可用目录与缓存                                     |
+| `/commandcode-status`                          | 脱敏诊断：transport、目录来源/数量、plan 来源、套餐目录来源、过滤计数、缓存路径                                         |
 | `/commandcode-usage`                           | 5 小时 / 周 / 月限额用量比例（进度条展示），agent 运行中输入也立即返回；TUI 走持久卡片，print/json 输出到 stdout/stderr |
 
 ## 环境变量
 
-| 变量                            | 用途                                                                           | 默认值                                |
-| ------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------- |
-| `COMMAND_CODE_API_KEY`          | Command Code API key                                                           | 无                                    |
-| `COMMANDCODE_PLAN`              | 套餐模式：`auto`/`go`/`goat`/`pro`/`max`                                       | `auto`                                |
-| `COMMANDCODE_PLAN_CACHE`        | 套餐缓存路径覆盖                                                               | `<agent-dir>/commandcode-plans.json`  |
-| `COMMANDCODE_API_BASE`          | 测试/兼容端点覆盖                                                              | 官方地址                              |
-| `COMMANDCODE_MODELS_URL`        | 模型目录端点覆盖                                                               | `<api-base>/models`                   |
-| `COMMANDCODE_MODELS_CACHE`      | 模型缓存路径覆盖                                                               | `<agent-dir>/commandcode-models.json` |
-| `COMMANDCODE_MODELS_TIMEOUT_MS` | 模型目录请求超时                                                               | `10000`                               |
-| `CMD_ZDR`                       | 值为 `1` 时发送 `x-cmd-zdr: 1` 零数据保留头（旧别名 `COMMANDCODE_ZDR` 仍生效） | 未启用                                |
+| 变量                                  | 用途                                                                           | 默认值                                            |
+| ------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------- |
+| `COMMAND_CODE_API_KEY`                | Command Code API key                                                           | 无                                                |
+| `COMMANDCODE_PLAN`                    | 套餐模式：`auto`/`go`/`goat`/`pro`/`max`                                       | `auto`                                            |
+| `COMMANDCODE_PLAN_CACHE`              | 套餐缓存路径覆盖                                                               | `<agent-dir>/commandcode-plans.json`              |
+| `COMMANDCODE_PLAN_CATALOG_CACHE`      | 动态套餐目录缓存路径覆盖                                                       | `<agent-dir>/commandcode-plan-catalog-cache.json` |
+| `COMMANDCODE_PLAN_REGISTRY_URL`       | 套餐目录版本查询端点覆盖（npm packument）                                      | `registry.npmjs.org/command-code/latest`          |
+| `COMMANDCODE_PLAN_CATALOG_URL`        | 套餐目录原文 URL 模板覆盖（含 `{version}` 占位）                               | unpkg 上的 models.md                              |
+| `COMMANDCODE_PLAN_CATALOG_TIMEOUT_MS` | 套餐目录请求超时                                                               | `10000`                                           |
+| `COMMANDCODE_API_BASE`                | 测试/兼容端点覆盖                                                              | 官方地址                                          |
+| `COMMANDCODE_MODELS_URL`              | 模型目录端点覆盖                                                               | `<api-base>/models`                               |
+| `COMMANDCODE_MODELS_CACHE`            | 模型缓存路径覆盖                                                               | `<agent-dir>/commandcode-models.json`             |
+| `COMMANDCODE_MODELS_TIMEOUT_MS`       | 模型目录请求超时                                                               | `10000`                                           |
+| `CMD_ZDR`                             | 值为 `1` 时发送 `x-cmd-zdr: 1` 零数据保留头（旧别名 `COMMANDCODE_ZDR` 仍生效） | 未启用                                            |
 
-`COMMANDCODE_API_BASE`、`COMMANDCODE_MODELS_URL`、`COMMANDCODE_MODELS_CACHE`、`COMMANDCODE_MODELS_TIMEOUT_MS` 仅用于测试与本地 mock。
+`COMMANDCODE_API_BASE`、`COMMANDCODE_MODELS_URL`、`COMMANDCODE_MODELS_CACHE`、`COMMANDCODE_MODELS_TIMEOUT_MS`、`COMMANDCODE_PLAN_REGISTRY_URL`、`COMMANDCODE_PLAN_CATALOG_URL` 仅用于测试与本地 mock。
 
 ## 离线行为
 
 模型目录缓存到 `<agent-dir>/commandcode-models.json`：有缓存时立即注册并后台刷新，网络不可用时沿用缓存；首次离线启动则等网络恢复后 `/commandcode-refresh` 成功。套餐识别同理（见上文失败降级）。
+
+模型最低套餐元数据是双层结构：代码内静态快照（`src/commandcode-plan-catalog.ts`，随上游 command-code CLI 发布手动同步）是离线兼底；每次目录刷新（启动后台刷新与 `/commandcode-refresh`）会同时从上游 npm 包（registry 查最新版本 + unpkg 拉版本化 `reference/models.md`）刷新动态套餐目录，缓存到 `<agent-dir>/commandcode-plan-catalog-cache.json`。动态目录仅在版本不旧于静态快照时生效（旧缓存不会回退代码内数据）；抓取/解析失败时静默沿用缓存，无缓存则回落静态快照并给出告警。静态快照外的新模型不再需要等发版，刷新一次即可解锁。
 
 ## 开发
 

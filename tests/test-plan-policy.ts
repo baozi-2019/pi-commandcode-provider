@@ -133,6 +133,41 @@ describe("filterCommandCodeModels()", () => {
   })
 })
 
+describe("dynamic plan catalog", () => {
+  it("exposes models absent from the bundled snapshot via the dynamic map", () => {
+    const upstream = [model("vendor/new-unlisted-model")]
+    const dynamic = { "vendor/new-unlisted-model": "go" } as const
+
+    const hidden = filterCommandCodeModels(upstream, "max")
+    assert.deepEqual(hidden.unknownModelIds, ["vendor/new-unlisted-model"])
+
+    const visible = filterCommandCodeModels(upstream, "go", dynamic)
+    assert.equal(visible.models.length, 1)
+    assert.deepEqual(visible.unknownModelIds, [])
+  })
+
+  it("dynamic map takes precedence over the bundled snapshot in both directions", () => {
+    const raised = { "deepseek/deepseek-v4-flash": "max" } as const
+    const onGo = filterCommandCodeModels([model("deepseek/deepseek-v4-flash")], "go", raised)
+    assert.equal(onGo.models.length, 0, "upstream may raise the minimum plan")
+
+    const lowered = { "claude-opus-5": "go" } as const
+    const onGoLowered = filterCommandCodeModels([model("claude-opus-5")], "go", lowered)
+    assert.equal(onGoLowered.models.length, 1, "upstream may lower the minimum plan")
+  })
+
+  it("requiredPlanForModel and the transport guard consult the dynamic map", () => {
+    const dynamic = { "vendor/dynamic-only": "pro" } as const
+    assert.equal(requiredPlanForModel("vendor/dynamic-only", dynamic), "pro")
+    assert.doesNotThrow(() => assertCommandCodeModelAllowed("vendor/dynamic-only", "pro", dynamic))
+    assert.throws(
+      () => assertCommandCodeModelAllowed("vendor/dynamic-only", "go", dynamic),
+      /requires the pro plan/,
+    )
+    assert.equal(requiredPlanForModel("vendor/dynamic-only"), undefined)
+  })
+})
+
 describe("requiredPlanForModel()", () => {
   it("returns undefined for catalog-external model ids", () => {
     assert.equal(requiredPlanForModel("vendor/not-in-catalog"), undefined)

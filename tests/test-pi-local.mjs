@@ -78,6 +78,9 @@ let overflowMode = false
 let overflowRequestCount = 0
 let modelsDelayMs = 0
 let includeRefreshedModel = false
+// Adds catalog models that the bundled plan snapshot has no metadata for;
+// only the dynamic plan-catalog mock can make them visible.
+let includeDynamicModels = false
 // Subscription plan reported by the mock /alpha/billing/subscriptions endpoint.
 // "max" keeps every catalog model visible so the legacy 3/4 model-count
 // assertions stay valid; individual tests override it as needed.
@@ -120,7 +123,42 @@ function modelCatalog() {
       context_length: 500_000,
     })
   }
+  if (includeDynamicModels) {
+    data.push(
+      {
+        id: "testvendor/dynamic-go-model",
+        object: "model",
+        created: 1779824324,
+        owned_by: "command-code",
+        name: "Dynamic Go Model",
+        context_length: 500_000,
+      },
+      {
+        id: "testvendor/unlisted-model",
+        object: "model",
+        created: 1779824324,
+        owned_by: "command-code",
+        name: "Unlisted Model",
+        context_length: 500_000,
+      },
+    )
+  }
   return { object: "list", data }
+}
+
+/** Minimal upstream models.md: >= 30 filler rows to pass the parser gate. */
+function planCatalogMarkdown() {
+  const rows = [
+    "| Id (use EXACTLY this) | Name | Context | Efforts | Price | Min plan | Best for |",
+    "|---|---|---|---|---|---|---|",
+    "| `testvendor/dynamic-go-model` | Dynamic Go Model | 500K | — | $0/$0 | Go and above | test |",
+  ]
+  for (let index = 0; index < 35; index += 1) {
+    rows.push(
+      `| \`filler/model-${index}\` | Filler ${index} | 1M | — | $0/$0 | Go and above | filler |`,
+    )
+  }
+  return `${rows.join("\n")}\n`
 }
 
 const server = createServer((req, res) => {
@@ -152,6 +190,22 @@ const server = createServer((req, res) => {
   if (req.method === "GET" && pathname === "/alpha/billing/subscriptions") {
     res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" })
     res.end(JSON.stringify({ data: { planId, status: "active" } }))
+    return
+  }
+
+  // Dynamic plan-catalog sources: npm registry packument + unpkg raw file.
+  if (req.method === "GET" && pathname === "/npm/command-code/latest") {
+    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" })
+    res.end(JSON.stringify({ version: "1.99.0" }))
+    return
+  }
+
+  if (
+    req.method === "GET" &&
+    pathname === "/cdn/command-code@1.99.0/dist/bundled/command-code-knowledge/reference/models.md"
+  ) {
+    res.writeHead(200, { "Content-Type": "text/markdown; charset=utf-8" })
+    res.end(planCatalogMarkdown())
     return
   }
 
@@ -262,6 +316,9 @@ const env = {
   COMMAND_CODE_API_KEY: "mock-key",
   CMD_ZDR: "1",
   COMMANDCODE_MODELS_URL: `${apiBase}/provider/v1/models`,
+  // Keep the dynamic plan-catalog refresh hermetic: registry + CDN mocks.
+  COMMANDCODE_PLAN_REGISTRY_URL: `${apiBase}/npm/command-code/latest`,
+  COMMANDCODE_PLAN_CATALOG_URL: `${apiBase}/cdn/command-code@{version}/dist/bundled/command-code-knowledge/reference/models.md`,
   // Default to an unrestricted plan so credential-source tests that run
   // without an env key keep every catalog model visible; plan-specific tests
   // override or unset this variable.
@@ -1224,6 +1281,25 @@ try {
   assert.doesNotMatch(forcedGoList.stdout, /gpt-5\.4/)
   assert.doesNotMatch(forcedGoList.stdout, /claude-sonnet-4-6/)
   assert.doesNotMatch(forcedGoList.stdout, /xai\/grok-4\.6/)
+
+  console.log("[pi-local] dynamic plan catalog covers models the bundled snapshot misses")
+  includeDynamicModels = true
+  rmSync(catalogCachePath, { force: true })
+  const planCatalogCachePath = join(agentDir, "commandcode-plan-catalog-cache.json")
+  rmSync(planCatalogCachePath, { force: true })
+  const dynamicGoList = await runPi(
+    ["--no-extensions", "-e", EXT_PATH, "--list-models", "commandcode"],
+    { env: { COMMANDCODE_PLAN: "go" } },
+  )
+  assert.equal(dynamicGoList.code, 0, dynamicGoList.stderr)
+  assert.match(dynamicGoList.stdout, /testvendor\/dynamic-go-model/)
+  assert.doesNotMatch(dynamicGoList.stdout, /testvendor\/unlisted-model/)
+  const planCatalogCache = JSON.parse(readFileSync(planCatalogCachePath, "utf-8"))
+  assert.equal(planCatalogCache.catalogVersion, "1.99.0")
+  assert.equal(planCatalogCache.entries["testvendor/dynamic-go-model"], "go")
+  assert.doesNotMatch(JSON.stringify(planCatalogCache), /mock-key/)
+  includeDynamicModels = false
+  rmSync(catalogCachePath, { force: true })
 
   console.log("[pi-local] /commandcode-plan shows, changes, and validates the plan")
   const planCommands = await runRpcPlanCommands()

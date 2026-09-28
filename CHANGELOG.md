@@ -4,6 +4,7 @@
 
 ## 未发布
 
+- 新增动态套餐目录：`/commandcode-refresh` 与启动后台刷新现在同时从上游 `command-code` npm 包刷新最低套餐元数据（registry packument 查最新版本 → unpkg 拉取版本化 `reference/models.md`，与静态快照同源同格式），缓存到 `<agent-dir>/commandcode-plan-catalog-cache.json`；优先级为动态缓存 ≥ 静态快照 > fail-closed 隐藏，版本旧于静态快照的缓存不生效、抓取/解析失败静默回落。上游新增模型不再需要等扩展发版——刷新一次即可按正确套餐可见；新增 `COMMANDCODE_PLAN_CATALOG_CACHE` / `COMMANDCODE_PLAN_REGISTRY_URL` / `COMMANDCODE_PLAN_CATALOG_URL` / `COMMANDCODE_PLAN_CATALOG_TIMEOUT_MS` 环境变量，`/commandcode-status` 输出套餐目录来源；传输层 `assertCommandCodeModelAllowed` 同步使用动态目录。
 - 模型最低套餐快照按上游 `command-code@1.62.0` 的 `reference/models.md` 整体重新生成（77 个模型：Go 49 / GOAT 8 / Pro 13 / Max 7）：补录线上新增且此前被 fail-closed 隐藏的 5 款模型（`xai/grok-4.7`、`xiaomi/mimo-v2.6-pro-ultraspeed` 为 goat，`xiaomi/mimo-v2.6-pro`、`xiaomi/mimo-v2.6-flash`、`stepfun/Step-5-Preview` 为 go），同步删除上游已移除的 `meituan/LongCat-2.0:free`；消除每次会话启动的「N model(s) hidden because their minimum plan is unknown」提示，`/commandcode-refresh` 本就无法消除该提示（套餐快照是代码内静态表，非运行时获取）。
 - `/commandcode-usage` 输出通道对齐 pi-kimi-usage 四通道矩阵：TUI 的 info 改为 `appendEntry` 持久卡片（`index.ts` 注册 `registerEntryRenderer`，`customMessageBg` 渲染，不再被流式输出顶起，SGR 39 亮度 hack 随之退役）；warning/error 维持 `ui.notify`；print 模式输出 stdout、json 模式输出 stderr——此前无 UI 模式下 `ui.notify` 为宿主 no-op，命令零输出；新增 `@earendil-works/pi-tui` optional peer 与对应 shim 类型面，运行中立即返回的行为不变。
 - `/commandcode-usage` 不再等待 agent 空闲：pi 对扩展命令本就立即执行（streaming 期间亦然），此前 handler 首行 `await ctx.waitForIdle?.()` 导致运行中输入命令也要等任务结束才显示配额；该 handler 只读取配额并弹通知，移除等待后 agent 运行中输入立即返回用量（通知 toast 可能被流式输出顶起，属预期现象）。

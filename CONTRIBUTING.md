@@ -25,7 +25,7 @@ npm install
 
 - 单元测试用 Node 内置 `node:test` + `node:assert/strict`，直接用 `npx tsx tests/test-xxx.ts` 运行，风格参考 `tests/test-models.ts`。
 - 测试必须 hermetic：不访问真实网络。用注入的 `fetchImpl` mock；套餐识别测试参考 `tests/test-plan-resolver.ts` 的 URL 分发写法。
-- `tests/test-pi-local.mjs` 是真实 pi 进程的集成测试：mock 服务器按 pathname 匹配（新版 pi 会给 Anthropic 端点加 query string，不能用完整 URL 比较）。**修改套餐相关逻辑时必须保留 `/alpha/whoami` 与 `/alpha/billing/subscriptions` 两个 mock 端点**，否则启动识别失败会改变可见模型集合。
+- `tests/test-pi-local.mjs` 是真实 pi 进程的集成测试：mock 服务器按 pathname 匹配（新版 pi 会给 Anthropic 端点加 query string，不能用完整 URL 比较）。**修改套餐相关逻辑时必须保留 `/alpha/whoami`、`/alpha/billing/subscriptions` 与动态套餐目录的 `/npm/command-code/latest`、`/cdn/command-code@<version>/...` mock 端点**，否则启动识别失败会改变可见模型集合。
 - mock 模型目录优先使用 `src/commandcode-plan-catalog.ts` 中存在的真实模型 ID；假 ID 会被套餐过滤按"未知元数据"隐藏。
 - 只服务当前改动的临时测试在通过后删除，不进仓库。
 

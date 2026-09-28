@@ -36,6 +36,8 @@ export interface CommandCodeRuntimeOptions<TProviderConfig> {
   }
   getTransport?: () => "unknown" | "provider" | "generate"
   getPlanStatus?: () => string
+  /** Dynamic plan-catalog source line for /commandcode-status (e.g. "live 1.66.0"). */
+  getPlanCatalogStatus?: () => string | undefined
   beforeRefresh?: () => Promise<void>
   now?: () => number
   logWarning?: (message: string) => void
@@ -48,6 +50,7 @@ export interface CommandCodeRuntimeStatus {
   catalogModelCount: number
   filteredModelCount: number
   plan?: string
+  planCatalog?: string
   lastSuccess?: number
   lastAttempt?: number
   cachePath: string
@@ -105,6 +108,7 @@ export function formatCommandCodeStatus(status: CommandCodeRuntimeStatus): strin
     `catalog model count: ${status.catalogModelCount}`,
     `filtered model count: ${status.filteredModelCount}`,
     ...(status.plan ? [status.plan] : []),
+    ...(status.planCatalog ? [`plan catalog: ${status.planCatalog}`] : []),
     `last success: ${formatTimestamp(status.lastSuccess)}`,
     `last attempt: ${formatTimestamp(status.lastAttempt)}`,
     `cache path: ${status.cachePath}`,
@@ -148,6 +152,7 @@ export class CommandCodeRuntime<TProviderConfig, TContext extends CommandCodeCom
       ...this.status,
       transport: this.options.getTransport?.() ?? "unknown",
       plan: this.options.getPlanStatus?.(),
+      planCatalog: this.options.getPlanCatalogStatus?.(),
     }
   }
 

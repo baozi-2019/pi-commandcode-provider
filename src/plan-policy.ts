@@ -16,6 +16,7 @@ export interface FilteredModelsResult {
 export function filterCommandCodeModels(
   models: readonly CommandCodeModel[],
   effectivePlan: EffectivePlan,
+  dynamicMinPlans?: Readonly<Record<string, SubscriptionPlan>>,
 ): FilteredModelsResult {
   const filterPlan = filterPlanFor(effectivePlan)
   if (filterPlan === "provider") {
@@ -24,7 +25,9 @@ export function filterCommandCodeModels(
 
   const unknownModelIds: string[] = []
   const available = models.filter((model) => {
-    const requiredPlan = MODEL_MIN_PLAN[model.id]
+    // The runtime-refreshed catalog (when newer than the bundled snapshot)
+    // takes precedence; models unknown to both stay fail-closed hidden.
+    const requiredPlan = dynamicMinPlans?.[model.id] ?? MODEL_MIN_PLAN[model.id]
     if (!requiredPlan) {
       unknownModelIds.push(model.id)
       return false
@@ -39,12 +42,19 @@ export function filterCommandCodeModels(
   }
 }
 
-export function requiredPlanForModel(modelId: string): SubscriptionPlan | undefined {
-  return MODEL_MIN_PLAN[modelId]
+export function requiredPlanForModel(
+  modelId: string,
+  dynamicMinPlans?: Readonly<Record<string, SubscriptionPlan>>,
+): SubscriptionPlan | undefined {
+  return dynamicMinPlans?.[modelId] ?? MODEL_MIN_PLAN[modelId]
 }
 
-export function assertCommandCodeModelAllowed(modelId: string, effectivePlan: EffectivePlan): void {
-  const requiredPlan = requiredPlanForModel(modelId)
+export function assertCommandCodeModelAllowed(
+  modelId: string,
+  effectivePlan: EffectivePlan,
+  dynamicMinPlans?: Readonly<Record<string, SubscriptionPlan>>,
+): void {
+  const requiredPlan = requiredPlanForModel(modelId, dynamicMinPlans)
   if (!requiredPlan) {
     throw new Error(
       `Command Code model "${modelId}" has no verified plan metadata; refresh the model catalog before using it`,
