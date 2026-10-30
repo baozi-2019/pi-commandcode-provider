@@ -81,6 +81,7 @@ let includeRefreshedModel = false
 // Adds catalog models that the bundled plan snapshot has no metadata for;
 // only the dynamic plan-catalog mock can make them visible.
 let includeDynamicModels = false
+let includeHaikuModel = false
 // Subscription plan reported by the mock /alpha/billing/subscriptions endpoint.
 // "max" keeps every catalog model visible so the legacy 3/4 model-count
 // assertions stay valid; individual tests override it as needed.
@@ -123,6 +124,16 @@ function modelCatalog() {
       context_length: 500_000,
     })
   }
+  if (includeHaikuModel) {
+    data.push({
+      id: "claude-haiku-5-5",
+      object: "model",
+      created: 1779824324,
+      owned_by: "command-code",
+      name: "Claude Haiku 5.5",
+      context_length: 1_000_000,
+    })
+  }
   if (includeDynamicModels) {
     data.push(
       {
@@ -152,6 +163,7 @@ function planCatalogMarkdown() {
     "| Id (use EXACTLY this) | Name | Context | Efforts | Price | Min plan | Best for |",
     "|---|---|---|---|---|---|---|",
     "| `testvendor/dynamic-go-model` | Dynamic Go Model | 500K | — | $0/$0 | Go and above | test |",
+    "| `claude-haiku-5-5` | Claude Haiku 5.5 | 1M | low, medium, high, xhigh, max | $0/$0 | GOAT and above | test |",
   ]
   for (let index = 0; index < 35; index += 1) {
     rows.push(
@@ -235,6 +247,23 @@ const server = createServer((req, res) => {
       lastRequestBody = JSON.parse(body)
     } catch {
       lastRequestBody = undefined
+    }
+
+    if (lastRequestBody?.model === "claude-haiku-5-5") {
+      const binding = lastRequestBody.thinking?.block_binding?.prefix_mismatch_behavior
+      const betas = lastRequestHeaders["anthropic-beta"] ?? ""
+      if (binding !== "drop_block" || !betas.includes("thinking-binding-controls-2026-08-01")) {
+        res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" })
+        res.end(
+          JSON.stringify({
+            error: {
+              type: "invalid_request_error",
+              message: "Invalid signature in thinking block; prefix mismatch",
+            },
+          }),
+        )
+        return
+      }
     }
 
     if (overflowMode && overflowRequestCount === 2) {
@@ -1207,13 +1236,80 @@ try {
   assert.equal(rpc.sawTextDelta, true)
   assert.equal(requestCount, 1)
 
+  console.log("[pi-local] Haiku 5.5 low tolerates a signed thinking prefix mismatch")
+  includeHaikuModel = true
+  // Pre-seed both caches so startup registration does not race the background
+  // catalog refresh (--model must resolve against a synchronously loaded list).
+  writeFileSync(
+    join(agentDir, "commandcode-models.json"),
+    `${JSON.stringify(
+      {
+        version: 1,
+        models: [
+          {
+            id: "claude-haiku-5-5",
+            name: "Claude Haiku 5.5",
+            api: "anthropic-messages",
+            reasoning: true,
+            contextWindow: 1_000_000,
+            maxTokens: 65_536,
+          },
+        ],
+      },
+      null,
+      2,
+    )}\n`,
+  )
+  writeFileSync(
+    join(agentDir, "commandcode-plan-catalog-cache.json"),
+    `${JSON.stringify(
+      {
+        version: 1,
+        catalogVersion: "1.99.0",
+        fetchedAt: new Date().toISOString(),
+        entries: { "claude-haiku-5-5": "goat" },
+        efforts: { "claude-haiku-5-5": ["low", "medium", "high", "xhigh", "max"] },
+      },
+      null,
+      2,
+    )}\n`,
+  )
+  requestCount = 0
+  const haikuPrint = await runPi([
+    "--no-extensions",
+    "-e",
+    EXT_PATH,
+    "-p",
+    "say mock token",
+    "--provider",
+    "commandcode",
+    "--model",
+    "claude-haiku-5-5",
+    "--thinking",
+    "low",
+  ])
+  assert.equal(haikuPrint.code, 0, haikuPrint.stderr)
+  assert.match(haikuPrint.stdout, /mock-pi-ok/)
+  assert.equal(requestCount, 1)
+  assert.equal(lastRequestBody?.model, "claude-haiku-5-5")
+  assert.equal(lastRequestBody?.thinking?.type, "adaptive")
+  assert.equal(lastRequestBody?.thinking?.block_binding?.prefix_mismatch_behavior, "drop_block")
+  assert.deepEqual(lastRequestBody?.output_config, { effort: "low" })
+  assert.match(lastRequestHeaders["anthropic-beta"] ?? "", /thinking-binding-controls-2026-08-01/)
+  includeHaikuModel = false
+  rmSync(join(agentDir, "commandcode-models.json"), { force: true })
+  rmSync(join(agentDir, "commandcode-plan-catalog-cache.json"), { force: true })
+
   console.log("[pi-local] forward image input through the documented provider schema")
   requestCount = 0
+  // Host pi decodes and resizes images before forwarding (Photon WASM); a bare
+  // PNG signature is replaced by an "[Image omitted ...]" placeholder, so use a
+  // valid 1x1 transparent PNG.
   const imageRpc = await runRpcQuery(10_000, "describe image", [], {
     images: [
       {
         type: "image",
-        data: "iVBORw0KGgo=",
+        data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
         mimeType: "image/png",
       },
     ],

@@ -86,7 +86,7 @@ pi --list-models commandcode
 pi -p "hello" --model commandcode/deepseek/deepseek-v4-flash
 ```
 
-**Reasoning**：thinking 档位按官方 CLI 目录注册，只有模型支持的档位可选；部分模型由 Command Code 自动决定推理深度。静态快照外的新模型，其档位随动态套餐目录一起从上游 models.md 的 Efforts 列刷新（见下方「套餐识别」）。
+**Reasoning**：thinking 档位按官方 CLI 目录注册，只有模型支持的档位可选；部分模型由 Command Code 自动决定推理深度。静态快照外的新模型，其档位随动态套餐目录一起从上游 models.md 的 Efforts 列刷新（见下方「套餐识别」）。Claude 模型开启思考时使用 adaptive thinking；当历史 `thinking` 块的签名与当前会话前缀不匹配时，请求携带 Anthropic 的 `thinking-binding-controls-2026-08-01` beta 与 `drop_block` 选项，让服务端丢弃不兼容的旧块，避免会话因 400 中断。
 
 **图片输入**：只为官方目录标记了图像输入的模型开启，其余模型按纯文本处理。
 

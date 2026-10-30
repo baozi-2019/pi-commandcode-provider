@@ -18,6 +18,7 @@ import { Box, Text } from "@earendil-works/pi-tui"
 import { join } from "node:path"
 
 import { getConfiguredApiKey } from "./src/api-key.ts"
+import { allowThinkingPrefixMismatch } from "./src/anthropic-thinking.ts"
 import { pickCommandCodeApiKey, withResolvedCommandCodeApiKey } from "./src/converters.ts"
 import { createStreamCommandCode } from "./src/core.ts"
 import { calculateCommandCodeCost } from "./src/cost.ts"
@@ -244,10 +245,23 @@ export default async function (pi: ExtensionAPI) {
     createStream: () => new AssistantMessageEventStream(),
     streamProvider: (model, context, options) => {
       assertCommandCodeModelAllowed(model.id, planResolution.plan, dynamicPlanCatalog)
+      const api = apiForModelId(model.id)
+      const streamOptions = resolveStreamOptions(options)
       return streamNativeProvider(
-        { ...model, api: apiForModelId(model.id), compat: model.compatConfig ?? model.compat },
+        { ...model, api, compat: model.compatConfig ?? model.compat },
         context,
-        resolveStreamOptions(options),
+        api === "anthropic-messages"
+          ? {
+              ...streamOptions,
+              onPayload: async (
+                payload: unknown,
+                requestModel: Parameters<NonNullable<typeof streamOptions.onPayload>>[1],
+              ) => {
+                const result = await streamOptions?.onPayload?.(payload, requestModel)
+                return allowThinkingPrefixMismatch(result ?? payload) ?? result
+              },
+            }
+          : streamOptions,
       )
     },
     streamGenerate: (model, context, options) => {

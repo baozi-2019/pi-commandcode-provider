@@ -4,6 +4,8 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, it } from "node:test"
 
+import { allowThinkingPrefixMismatch } from "../src/anthropic-thinking.ts"
+
 import { MODEL_EFFORT_OVERRIDES } from "../src/commandcode-catalog-overrides.ts"
 import {
   COMMAND_CODE_CLI_VERSION,
@@ -305,6 +307,29 @@ describe("commandCodeModelsFromApiResponse()", () => {
     // The runtime table is newer than the snapshot, so its levels are authoritative.
     assert.deepEqual(effortsForModel(modelId, dynamicEfforts), dynamicEfforts[modelId])
     assert.equal(isReasoningCapable(modelId, dynamicEfforts), true)
+  })
+
+  it("adds the Anthropic prefix-mismatch control only to adaptive requests", () => {
+    const payload = {
+      model: "claude-haiku-5-5",
+      thinking: { type: "adaptive", display: "summarized" },
+      betas: ["existing-beta"],
+    }
+    assert.deepEqual(allowThinkingPrefixMismatch(payload), {
+      ...payload,
+      thinking: {
+        ...payload.thinking,
+        block_binding: { prefix_mismatch_behavior: "drop_block" },
+      },
+      betas: ["existing-beta", "thinking-binding-controls-2026-08-01"],
+    })
+    assert.equal(allowThinkingPrefixMismatch({ thinking: { type: "enabled" } }), undefined)
+    assert.equal(allowThinkingPrefixMismatch({ thinking: { type: "disabled" } }), undefined)
+    const alreadyEnabled = {
+      thinking: { type: "adaptive" },
+      betas: ["thinking-binding-controls-2026-08-01"],
+    }
+    assert.deepEqual(allowThinkingPrefixMismatch(alreadyEnabled)?.betas, alreadyEnabled.betas)
   })
 
   it("sends adaptive thinking for snapshot-missing reasoning models", () => {
