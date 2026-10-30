@@ -88,8 +88,32 @@ export interface ThinkingMetadata {
   }
 }
 
-export function thinkingMetadataForModel(modelId: string): ThinkingMetadata | undefined {
-  const efforts = MODEL_EFFORTS[modelId]
+/**
+ * Selectable efforts for a model: the runtime upstream table wins over the
+ * bundled snapshot, so models published after the snapshot can still think.
+ */
+export function effortsForModel(
+  modelId: string,
+  dynamicEfforts?: Readonly<Record<string, readonly CommandCodeReasoningEffort[]>>,
+): readonly CommandCodeReasoningEffort[] | undefined {
+  const dynamic = dynamicEfforts?.[modelId]
+  if (dynamic && dynamic.length > 0) return dynamic
+  return MODEL_EFFORTS[modelId]
+}
+
+/** True when the snapshot flags the model, or upstream publishes selectable efforts for it. */
+export function isReasoningCapable(
+  modelId: string,
+  dynamicEfforts?: Readonly<Record<string, readonly CommandCodeReasoningEffort[]>>,
+): boolean {
+  return isReasoningModel(modelId) || (dynamicEfforts?.[modelId]?.length ?? 0) > 0
+}
+
+export function thinkingMetadataForModel(
+  modelId: string,
+  dynamicEfforts?: Readonly<Record<string, readonly CommandCodeReasoningEffort[]>>,
+): ThinkingMetadata | undefined {
+  const efforts = effortsForModel(modelId, dynamicEfforts)
   if (efforts) {
     return {
       thinkingLevelMap: thinkingLevelMapForEfforts(efforts),

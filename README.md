@@ -86,7 +86,7 @@ pi --list-models commandcode
 pi -p "hello" --model commandcode/deepseek/deepseek-v4-flash
 ```
 
-**Reasoning**：thinking 档位按官方 CLI 目录注册，只有模型支持的档位可选；部分模型由 Command Code 自动决定推理深度。
+**Reasoning**：thinking 档位按官方 CLI 目录注册，只有模型支持的档位可选；部分模型由 Command Code 自动决定推理深度。静态快照外的新模型，其档位随动态套餐目录一起从上游 models.md 的 Efforts 列刷新（见下方「套餐识别」）。
 
 **图片输入**：只为官方目录标记了图像输入的模型开启，其余模型按纯文本处理。
 
@@ -122,7 +122,7 @@ pi -p "hello" --model commandcode/deepseek/deepseek-v4-flash
 
 模型目录缓存到 `<agent-dir>/commandcode-models.json`：有缓存时立即注册并后台刷新，网络不可用时沿用缓存；首次离线启动则等网络恢复后 `/commandcode-refresh` 成功。套餐识别同理（见上文失败降级）。
 
-模型最低套餐元数据是双层结构：代码内静态快照（`src/commandcode-plan-catalog.ts`，随上游 command-code CLI 发布手动同步）是离线兼底；每次目录刷新（启动后台刷新与 `/commandcode-refresh`）会同时从上游 npm 包（registry 查最新版本 + unpkg 拉版本化 `reference/models.md`）刷新动态套餐目录，缓存到 `<agent-dir>/commandcode-plan-catalog-cache.json`。动态目录仅在版本不旧于静态快照时生效（旧缓存不会回退代码内数据）；抓取/解析失败时静默沿用缓存，无缓存则回落静态快照并给出告警。静态快照外的新模型不再需要等发版，刷新一次即可解锁。
+模型最低套餐元数据是双层结构：代码内静态快照（`src/commandcode-plan-catalog.ts`，随上游 command-code CLI 发布手动同步）是离线兼底；每次目录刷新（启动后台刷新与 `/commandcode-refresh`）会同时从上游 npm 包（registry 查最新版本 + unpkg 拉版本化 `reference/models.md`）刷新动态套餐目录，缓存到 `<agent-dir>/commandcode-plan-catalog-cache.json`。动态目录仅在版本不旧于静态快照时生效（旧缓存不会回退代码内数据）；抓取/解析失败时静默沿用缓存，无缓存则回落静态快照并给出告警。静态快照外的新模型不再需要等发版，刷新一次即可解锁。同一张表的 Efforts 列也一并解析，静态快照外的模型因此能拿到正确的 thinking 档位。
 
 ## 开发
 

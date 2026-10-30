@@ -15,8 +15,10 @@ import {
   commandCodeModelsFromApiResponse,
   commandCodeModelsFromCache,
   DEFAULT_MODELS_TIMEOUT_MS,
+  effortsForModel,
   getModelsTimeoutMs,
   inputModalitiesForModel,
+  isReasoningCapable,
   loadCommandCodeModels,
   MODEL_EFFORTS,
   MODEL_INPUT_MODALITIES,
@@ -269,6 +271,39 @@ describe("commandCodeModelsFromApiResponse()", () => {
       max: "max",
     })
     assert.deepEqual(thinkingMetadataForModel("new-model-without-metadata"), undefined)
+  })
+
+  it("lets the runtime catalog grant efforts and reasoning to snapshot-missing models", () => {
+    const dynamicEfforts = {
+      "claude-sonnet-5-5": ["low", "medium", "high", "xhigh", "max"] as const,
+    }
+    assert.equal(isReasoningCapable("claude-sonnet-5-5", dynamicEfforts), true)
+    assert.equal(isReasoningCapable("claude-sonnet-5-5"), false, "snapshot alone stays false")
+    assert.equal(isReasoningCapable("new-model-without-metadata", dynamicEfforts), false)
+    assert.deepEqual(effortsForModel("claude-sonnet-5-5", dynamicEfforts), [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max",
+    ])
+
+    const metadata = thinkingMetadataForModel("claude-sonnet-5-5", dynamicEfforts)
+    assert.ok(metadata)
+    assert.equal(metadata.thinkingLevelMap.high, "high")
+    assert.equal(metadata.thinkingLevelMap.max, "max")
+    assert.equal(metadata.thinkingLevelMap.low, "low")
+    assert.deepEqual(metadata.thinking?.efforts, ["low", "medium", "high", "xhigh", "max"])
+  })
+
+  it("prefers the runtime catalog for a model it covers", () => {
+    const modelId = Object.keys(MODEL_REASONING)[0]!
+    const snapshotEfforts = MODEL_EFFORTS[modelId]
+    assert.ok(snapshotEfforts, `${modelId} should have snapshot efforts`)
+    const dynamicEfforts = { [modelId]: [snapshotEfforts[0]!] as const }
+    // The runtime table is newer than the snapshot, so its levels are authoritative.
+    assert.deepEqual(effortsForModel(modelId, dynamicEfforts), dynamicEfforts[modelId])
+    assert.equal(isReasoningCapable(modelId, dynamicEfforts), true)
   })
 
   it("rejects unexpected API shapes", () => {

@@ -30,7 +30,8 @@ import {
   inputModalitiesForModel,
   loadCachedCommandCodeModels,
   loadCommandCodeModels,
-  MODEL_EFFORTS,
+  effortsForModel,
+  isReasoningCapable,
   thinkingMetadataForModel,
   type CommandCodeModel,
 } from "./src/models.ts"
@@ -43,6 +44,7 @@ import {
   DEFAULT_PLAN_REGISTRY_URL,
   readPlanCatalogCache,
   refreshPlanCatalog,
+  type ModelEffortsMap,
   usablePlanCatalogCache,
 } from "./src/plan-catalog-fetch.ts"
 import { COMMAND_CODE_MODEL_CATALOG_VERSION } from "./src/commandcode-plan-catalog.ts"
@@ -116,12 +118,15 @@ function commandCodeHeaders(): Record<string, string> | undefined {
 }
 
 /** Host compat overrides per upstream api family; forwarded to `streamSimple` opaquely. */
-function compatForModel(model: CommandCodeModel): Record<string, unknown> {
+function compatForModel(
+  model: CommandCodeModel,
+  dynamicEfforts: ModelEffortsMap | undefined,
+): Record<string, unknown> {
   if (model.api === "openai-completions") {
     return {
       supportsStore: false,
       supportsDeveloperRole: false,
-      supportsReasoningEffort: MODEL_EFFORTS[model.id] !== undefined,
+      supportsReasoningEffort: effortsForModel(model.id, dynamicEfforts) !== undefined,
       maxTokensField: "max_tokens",
     }
   }
@@ -146,6 +151,7 @@ function createProviderConfig(
   apiBase: string,
   streamCommandCode: ProviderConfig["streamSimple"],
   loginFlow: typeof login,
+  dynamicEfforts?: ModelEffortsMap,
 ): ProviderConfig {
   const headers = commandCodeHeaders()
   return {
@@ -166,14 +172,14 @@ function createProviderConfig(
       name: model.name,
       api: COMMAND_CODE_API,
       baseUrl: baseUrlForModel(apiBase, model.api),
-      reasoning: model.reasoning,
-      ...(thinkingMetadataForModel(model.id) ?? {}),
+      reasoning: isReasoningCapable(model.id, dynamicEfforts),
+      ...(thinkingMetadataForModel(model.id, dynamicEfforts) ?? {}),
       input: [...inputModalitiesForModel(model.id)],
       cost: MODEL_COSTS[model.id] ?? ZERO_MODEL_COST,
       contextWindow: model.contextWindow,
       maxTokens: model.maxTokens,
       headers,
-      compat: compatForModel(model),
+      compat: compatForModel(model, dynamicEfforts),
     })),
   }
 }
@@ -244,17 +250,20 @@ export default async function (pi: ExtensionAPI) {
   // offline floor. Cache older than the bundled snapshot is ignored so a stale
   // file can never regress code-shipped metadata.
   let dynamicPlanCatalog: Record<string, SubscriptionPlan> | undefined
+  let dynamicEfforts: ModelEffortsMap | undefined
   let planCatalogStatus = `bundled ${COMMAND_CODE_MODEL_CATALOG_VERSION}`
   const applyPlanCatalogOutcome = (outcome: {
     source: string
     catalogVersion?: string
     entries?: Record<string, SubscriptionPlan>
+    efforts?: ModelEffortsMap
     warning?: string
   }): string | undefined => {
     if (outcome.entries) {
       dynamicPlanCatalog = outcome.entries
       planCatalogStatus = `${outcome.source} ${outcome.catalogVersion}`
     }
+    if (outcome.efforts) dynamicEfforts = outcome.efforts
     return outcome.warning
   }
   const resolveStreamOptions = (options?: Parameters<typeof streamNativeProvider>[2]) =>
@@ -348,7 +357,7 @@ export default async function (pi: ExtensionAPI) {
       }
     },
     createProviderConfig: (models) =>
-      createProviderConfig(models, apiBase, transport.stream, loginWithPlan),
+      createProviderConfig(models, apiBase, transport.stream, loginWithPlan, dynamicEfforts),
     getTransport: transport.getTransport,
     getPlanStatus: () => formatPlanResolution(planResolution),
     getPlanCatalogStatus: () => planCatalogStatus,
@@ -398,6 +407,7 @@ export default async function (pi: ExtensionAPI) {
   const cachedPlanCatalog = usablePlanCatalogCache(await readPlanCatalogCache(planCatalogCachePath))
   if (cachedPlanCatalog) {
     dynamicPlanCatalog = cachedPlanCatalog.entries
+    dynamicEfforts = cachedPlanCatalog.efforts
     planCatalogStatus = `cache ${cachedPlanCatalog.catalogVersion}`
   }
 

@@ -1,11 +1,12 @@
 import assert from "node:assert/strict"
-import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, it } from "node:test"
 
 import {
   compareCatalogVersions,
+  parseModelCatalogMarkdown,
   parsePlanCatalogMarkdown,
   readPlanCatalogCache,
   refreshPlanCatalog,
@@ -94,6 +95,51 @@ describe("parsePlanCatalogMarkdown", () => {
   })
 })
 
+describe("parseModelCatalogMarkdown efforts", () => {
+  function effortsMarkdown(rows: Array<[string, string, string]>): string {
+    const header =
+      "| Id (use EXACTLY this) | Name | Context | Efforts | Price | Min plan | Best for |\n|---|---|---|---|---|---|---|\n"
+    return (
+      header +
+      rows
+        .map(
+          ([id, efforts, plan]) => `| \`${id}\` | X | 1M | ${efforts} | $1/$2 | ${plan} | stuff |`,
+        )
+        .join("\n") +
+      "\n"
+    )
+  }
+
+  it("parses selectable efforts from the Efforts column", () => {
+    const rows: Array<[string, string, string]> = []
+    for (let index = 0; index < 40; index += 1) {
+      rows.push([`vendor/model-${index}`, "—", "Go and above"])
+    }
+    rows.push(["claude-sonnet-5-5", "low, medium, high, xhigh, max", "GOAT and above"])
+    rows.push(["deepseek/deepseek-v4-flash", "off, high, max", "Go and above"])
+    const parsed = parseModelCatalogMarkdown(effortsMarkdown(rows))
+    assert.ok(parsed)
+    assert.deepEqual(parsed.efforts["claude-sonnet-5-5"], ["low", "medium", "high", "xhigh", "max"])
+    // `off` is not a selectable effort; it is dropped rather than mapped to a level.
+    assert.deepEqual(parsed.efforts["deepseek/deepseek-v4-flash"], ["high", "max"])
+    assert.equal(parsed.efforts["vendor/model-0"], undefined, "`—` must not yield an entry")
+    assert.equal(parsed.plans["claude-sonnet-5-5"], "goat")
+  })
+
+  it("tolerates a missing Efforts column", () => {
+    const header =
+      "| Id (use EXACTLY this) | Name | Context | Price | Min plan | Best for |\n|---|---|---|---|---|---|\n"
+    const rows: string[] = []
+    for (let index = 0; index < 40; index += 1) {
+      rows.push(`| \`vendor/model-${index}\` | X | 1M | $1/$2 | Go and above | stuff |`)
+    }
+    const parsed = parseModelCatalogMarkdown(header + rows.join("\n"))
+    assert.ok(parsed)
+    assert.equal(parsed.plans["vendor/model-0"], "go")
+    assert.deepEqual(parsed.efforts, {})
+  })
+})
+
 describe("compareCatalogVersions", () => {
   it("orders numeric semver segments", () => {
     assert.ok(compareCatalogVersions("1.66.0", "1.62.0") > 0)
@@ -135,6 +181,7 @@ describe("refreshPlanCatalog", () => {
     const cached = await readPlanCatalogCache(cachePath)
     assert.equal(cached?.catalogVersion, "1.99.0")
     assert.equal(cached?.entries?.["new/vendor-model"], "goat")
+    assert.deepEqual(cached?.efforts?.["vendor/model-0"], ["high"], "efforts must round-trip")
     const mode = (await stat(cachePath)).mode & 0o777
     assert.equal(mode, 0o600)
     const raw = await readFile(cachePath, "utf-8")
@@ -205,6 +252,7 @@ describe("refreshPlanCatalog", () => {
     })
     assert.equal(outcome.source, "bundled")
     assert.equal(outcome.entries, undefined)
+    assert.equal(outcome.efforts, undefined)
     assert.match(outcome.warning ?? "", /bundled snapshot/)
     // Warning text is redacted by the runtime layer; here it must at least not
     // embed credentials itself.
@@ -254,6 +302,40 @@ describe("usablePlanCatalogCache", () => {
     const cache = await readPlanCatalogCache(cachePath)
     assert.equal(cache?.catalogVersion, "0.0.1")
     assert.equal(usablePlanCatalogCache(cache), undefined)
+  })
+
+  it("refetches a version-matched cache that predates efforts tracking", async () => {
+    const cachePath = await tempCachePath()
+    const dir = join(cachePath, "..")
+    await mkdir(dir, { recursive: true })
+    await writeFile(
+      cachePath,
+      `${JSON.stringify({
+        version: 1,
+        catalogVersion: "1.99.0",
+        fetchedAt: new Date().toISOString(),
+        entries: { "vendor/model-0": "go" },
+      })}\n`,
+      "utf-8",
+    )
+    const urls: string[] = []
+    const outcome = await refreshPlanCatalog({
+      cachePath,
+      registryUrl: "https://registry.example/latest",
+      catalogUrlTemplate: "https://cdn.example/pkg@{version}/models.md",
+      fetchImpl: async (input) => {
+        urls.push(String(input))
+        return String(input).includes("/latest")
+          ? jsonResponse({ version: "1.99.0" })
+          : textResponse(validMarkdown())
+      },
+    })
+    assert.equal(outcome.source, "live", "plans-only cache must not satisfy the efforts gate")
+    assert.deepEqual(urls, [
+      "https://registry.example/latest",
+      "https://cdn.example/pkg@1.99.0/models.md",
+    ])
+    assert.ok(outcome.efforts)
   })
 
   it("ignores corrupt cache files", async () => {

@@ -8,6 +8,10 @@
  * the versioned `reference/models.md` — the exact same file the bundled
  * snapshot is generated from, with canonical catalog IDs.
  *
+ * The same table carries each model's reasoning `Efforts`; they are surfaced
+ * alongside the plans so a model published after the bundled capability
+ * snapshot can still expose thinking levels.
+ *
  * Priority: fresh runtime cache > bundled snapshot > fail-closed hidden.
  * Everything here is best-effort: fetch or parse failures never throw; they
  * degrade to the last-known-good cache, then to the bundled snapshot.
@@ -16,6 +20,7 @@
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises"
 import { dirname } from "node:path"
 
+import type { CommandCodeReasoningEffort } from "./commandcode-catalog.ts"
 import { COMMAND_CODE_MODEL_CATALOG_VERSION } from "./commandcode-plan-catalog.ts"
 import { isSubscriptionPlan, type SubscriptionPlan } from "./plan-types.ts"
 
@@ -31,11 +36,30 @@ const MIN_CATALOG_ROWS = 30
 const MODEL_ID_PATTERN = /^[\w./:@-]+$/
 const VERSION_PATTERN = /^\d+\.\d+\.\d+$/
 
+const REASONING_EFFORTS: ReadonlySet<string> = new Set<CommandCodeReasoningEffort>([
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+])
+
+/** Only models with at least one selectable effort appear; absence means "unknown/none". */
+export type ModelEffortsMap = Record<string, readonly CommandCodeReasoningEffort[]>
+
 export interface PlanCatalogCacheFile {
   version: number
   catalogVersion: string
   fetchedAt: string
   entries: Record<string, SubscriptionPlan>
+  /** Absent in caches written before efforts were tracked; forces one refetch. */
+  efforts?: ModelEffortsMap
+}
+
+export interface ParsedModelCatalog {
+  plans: Record<string, SubscriptionPlan>
+  efforts: ModelEffortsMap
 }
 
 export type PlanCatalogSource = "live" | "cache" | "bundled"
@@ -47,6 +71,8 @@ export interface PlanCatalogOutcome {
   fetchedAt?: string
   /** Present unless the outcome is "bundled". */
   entries?: Record<string, SubscriptionPlan>
+  /** Upstream reasoning efforts; present when the source carried them. */
+  efforts?: ModelEffortsMap
   warning?: string
 }
 
@@ -86,19 +112,32 @@ export function compareCatalogVersions(a: string, b: string): number {
   return 0
 }
 
+/** Parse one `Efforts` cell (`—` or `low, high, max`); unknown tokens such as `off` are dropped. */
+function parseEffortsCell(cell: string | undefined): CommandCodeReasoningEffort[] {
+  if (!cell) return []
+  const efforts: CommandCodeReasoningEffort[] = []
+  for (const token of cell.split(",")) {
+    const effort = token.trim().toLowerCase()
+    if (REASONING_EFFORTS.has(effort) && !efforts.includes(effort as CommandCodeReasoningEffort)) {
+      efforts.push(effort as CommandCodeReasoningEffort)
+    }
+  }
+  return efforts
+}
+
 /**
  * Parse the upstream `reference/models.md` tables: rows are
  * `| \`id\` | name | context | efforts | price | Min plan | best for |` where
- * the Min plan cell is `<Tier> [and above]`. The column position is taken from
+ * the Min plan cell is `<Tier> [and above]`. Column positions are taken from
  * the header, so upstream may reorder columns; rows with an unrecognized tier
  * are skipped (fail-closed per model). Returns undefined when the table is
  * missing or implausibly small — the caller then keeps the previous catalog.
  */
-export function parsePlanCatalogMarkdown(
-  markdown: string,
-): Record<string, SubscriptionPlan> | undefined {
-  const entries = new Map<string, SubscriptionPlan>()
+export function parseModelCatalogMarkdown(markdown: string): ParsedModelCatalog | undefined {
+  const plans = new Map<string, SubscriptionPlan>()
+  const efforts: ModelEffortsMap = {}
   let minPlanColumn = -1
+  let effortsColumn = -1
 
   for (const line of markdown.split("\n")) {
     if (!line.startsWith("|")) continue
@@ -111,6 +150,7 @@ export function parsePlanCatalogMarkdown(
     const headerIndex = cells.findIndex((cell) => /^min plan$/i.test(cell))
     if (headerIndex >= 0) {
       minPlanColumn = headerIndex
+      effortsColumn = cells.findIndex((cell) => /^efforts$/i.test(cell))
       continue
     }
     if (minPlanColumn < 0 || minPlanColumn >= cells.length) continue
@@ -122,10 +162,22 @@ export function parsePlanCatalogMarkdown(
 
     const planWord = cells[minPlanColumn]?.replace(/\s+and above$/i, "").toLowerCase()
     if (!planWord || !isSubscriptionPlan(planWord)) continue
-    entries.set(id, planWord)
+    plans.set(id, planWord)
+
+    if (effortsColumn >= 0) {
+      const parsed = parseEffortsCell(cells[effortsColumn])
+      if (parsed.length > 0) efforts[id] = parsed
+    }
   }
 
-  return entries.size >= MIN_CATALOG_ROWS ? Object.fromEntries(entries) : undefined
+  return plans.size >= MIN_CATALOG_ROWS ? { plans: Object.fromEntries(plans), efforts } : undefined
+}
+
+/** Plans-only view of {@link parseModelCatalogMarkdown}. */
+export function parsePlanCatalogMarkdown(
+  markdown: string,
+): Record<string, SubscriptionPlan> | undefined {
+  return parseModelCatalogMarkdown(markdown)?.plans
 }
 
 async function fetchJson(url: string, options: PlanCatalogFetchOptions): Promise<unknown> {
@@ -140,6 +192,21 @@ async function fetchText(url: string, options: PlanCatalogFetchOptions): Promise
   const response = await fetchImpl(url, { signal: options.signal })
   if (!response.ok) throw new Error(`GET ${url} failed with HTTP ${response.status}`)
   return response.text()
+}
+
+/** Invalid or missing efforts degrade to undefined (plans stay usable, efforts get refetched). */
+function sanitizeCachedEfforts(value: unknown): ModelEffortsMap | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined
+  const result: ModelEffortsMap = {}
+  for (const [id, list] of Object.entries(value)) {
+    if (!MODEL_ID_PATTERN.test(id) || !Array.isArray(list)) return undefined
+    const efforts = list.filter(
+      (item): item is CommandCodeReasoningEffort =>
+        typeof item === "string" && REASONING_EFFORTS.has(item),
+    )
+    if (efforts.length > 0) result[id] = efforts
+  }
+  return result
 }
 
 export async function readPlanCatalogCache(
@@ -163,6 +230,7 @@ export async function readPlanCatalogCache(
       catalogVersion: raw.catalogVersion,
       fetchedAt: raw.fetchedAt,
       entries: entries as Record<string, SubscriptionPlan>,
+      efforts: sanitizeCachedEfforts(raw.efforts),
     }
   } catch {
     return undefined
@@ -204,6 +272,16 @@ export function usablePlanCatalogCache(
     : undefined
 }
 
+function cacheOutcome(cache: PlanCatalogCacheFile): PlanCatalogOutcome {
+  return {
+    source: "cache",
+    catalogVersion: cache.catalogVersion,
+    fetchedAt: cache.fetchedAt,
+    entries: cache.entries,
+    ...(cache.efforts ? { efforts: cache.efforts } : {}),
+  }
+}
+
 /**
  * Refresh the dynamic plan catalog. Never throws; degrades live → cache → bundled.
  */
@@ -221,21 +299,17 @@ export async function refreshPlanCatalog(
       throw new Error("npm registry response did not include a valid version")
     }
 
-    if (cache?.catalogVersion === latestVersion) {
-      return {
-        source: "cache",
-        catalogVersion: cache.catalogVersion,
-        fetchedAt: cache.fetchedAt,
-        entries: cache.entries,
-      }
+    if (cache?.catalogVersion === latestVersion && cache.efforts !== undefined) {
+      return cacheOutcome(cache)
     }
 
     const url = catalogUrlTemplate.replace("{version}", latestVersion)
     const markdown = await fetchText(url, options)
-    const entries = parsePlanCatalogMarkdown(markdown)
-    if (!entries) {
+    const parsed = parseModelCatalogMarkdown(markdown)
+    if (!parsed) {
       throw new Error("upstream models.md did not yield a usable Min plan table")
     }
+    const { plans: entries, efforts } = parsed
 
     const fetchedAt = new Date().toISOString()
     try {
@@ -243,6 +317,7 @@ export async function refreshPlanCatalog(
         catalogVersion: latestVersion,
         fetchedAt,
         entries,
+        efforts,
       })
     } catch (writeError) {
       return {
@@ -250,19 +325,13 @@ export async function refreshPlanCatalog(
         catalogVersion: latestVersion,
         fetchedAt,
         entries,
+        efforts,
         warning: `Refreshed the plan catalog to ${latestVersion} but could not update the cache: ${errorMessage(writeError)}`,
       }
     }
-    return { source: "live", catalogVersion: latestVersion, fetchedAt, entries }
+    return { source: "live", catalogVersion: latestVersion, fetchedAt, entries, efforts }
   } catch (error) {
-    if (cache) {
-      return {
-        source: "cache",
-        catalogVersion: cache.catalogVersion,
-        fetchedAt: cache.fetchedAt,
-        entries: cache.entries,
-      }
-    }
+    if (cache) return cacheOutcome(cache)
     return {
       source: "bundled",
       warning: `Could not refresh the Command Code plan catalog (${errorMessage(error)}); using the bundled snapshot ${COMMAND_CODE_MODEL_CATALOG_VERSION}.`,
