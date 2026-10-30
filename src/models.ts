@@ -132,6 +132,54 @@ function isReasoningModel(modelId: string): boolean {
   return MODEL_REASONING[modelId] === true
 }
 
+/**
+ * Host compat flags forwarded opaquely through `streamSimple`.
+ *
+ * The Anthropic Messages transport sends `thinking.type: enabled` unless
+ * `forceAdaptiveThinking` is set, in which case it sends
+ * `thinking.type: adaptive` + `output_config.effort`. Command Code only
+ * accepts the adaptive form for reasoning models, so every reasoning model —
+ * including one whose reasoning comes from the runtime Efforts table rather
+ * than the bundled snapshot — must carry the flag.
+ */
+export interface CommandCodeCompat {
+  supportsStore?: boolean
+  supportsDeveloperRole?: boolean
+  supportsReasoningEffort?: boolean
+  maxTokensField?: string
+  supportsEagerToolInputStreaming?: boolean
+  supportsLongCacheRetention?: boolean
+  supportsCacheControlOnTools?: boolean
+  supportsToolReferences?: boolean
+  forceAdaptiveThinking?: boolean
+  [key: string]: unknown
+}
+
+export function compatForModel(
+  model: CommandCodeModel,
+  dynamicEfforts?: Readonly<Record<string, readonly CommandCodeReasoningEffort[]>>,
+): CommandCodeCompat {
+  if (model.api === "openai-completions") {
+    return {
+      supportsStore: false,
+      supportsDeveloperRole: false,
+      supportsReasoningEffort: effortsForModel(model.id, dynamicEfforts) !== undefined,
+      maxTokensField: "max_tokens",
+    }
+  }
+  const compat: CommandCodeCompat = {
+    supportsEagerToolInputStreaming: false,
+    supportsLongCacheRetention: false,
+    supportsCacheControlOnTools: false,
+    supportsToolReferences: false,
+  }
+  // Use the same dynamic-aware reasoning flag the provider config exposes as
+  // `reasoning`; `model.reasoning` is the bundled-snapshot value and is false
+  // for models published after the snapshot, which would send `enabled`.
+  if (isReasoningCapable(model.id, dynamicEfforts)) compat.forceAdaptiveThinking = true
+  return compat
+}
+
 function maxOutputTokensForModel(modelId: string, contextLength: number): number {
   return Math.min(contextLength, MODEL_MAX_OUTPUT_TOKENS[modelId] ?? DEFAULT_MAX_OUTPUT_TOKENS)
 }

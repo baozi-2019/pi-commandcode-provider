@@ -14,6 +14,7 @@ import {
   baseUrlForModel,
   commandCodeModelsFromApiResponse,
   commandCodeModelsFromCache,
+  compatForModel,
   DEFAULT_MODELS_TIMEOUT_MS,
   effortsForModel,
   getModelsTimeoutMs,
@@ -304,6 +305,67 @@ describe("commandCodeModelsFromApiResponse()", () => {
     // The runtime table is newer than the snapshot, so its levels are authoritative.
     assert.deepEqual(effortsForModel(modelId, dynamicEfforts), dynamicEfforts[modelId])
     assert.equal(isReasoningCapable(modelId, dynamicEfforts), true)
+  })
+
+  it("sends adaptive thinking for snapshot-missing reasoning models", () => {
+    // claude-sonnet-5-5 is absent from MODEL_REASONING (snapshot predates it), so
+    // its raw model.reasoning is false even though the runtime table lists efforts.
+    const model = {
+      id: "claude-sonnet-5-5",
+      name: "Claude Sonnet 5.5 (CC)",
+      api: "anthropic-messages" as const,
+      reasoning: false,
+      contextWindow: 1_000_000,
+      maxTokens: 65_536,
+    }
+    const dynamicEfforts = {
+      "claude-sonnet-5-5": ["low", "medium", "high", "xhigh", "max"] as const,
+    }
+    const compat = compatForModel(model, dynamicEfforts)
+    // Without forceAdaptiveThinking the host sends thinking.type: enabled, which
+    // Command Code rejects (400 invalid_request_error).
+    assert.equal(compat.forceAdaptiveThinking, true)
+  })
+
+  it("sends adaptive thinking for snapshot reasoning models", () => {
+    const model = {
+      id: "claude-sonnet-5",
+      name: "Claude Sonnet 5 (CC)",
+      api: "anthropic-messages" as const,
+      reasoning: true,
+      contextWindow: 1_000_000,
+      maxTokens: 65_536,
+    }
+    assert.equal(compatForModel(model).forceAdaptiveThinking, true)
+  })
+
+  it("does not set adaptive thinking for non-reasoning models", () => {
+    const model = {
+      id: "new-model-without-metadata",
+      name: "New Model (CC)",
+      api: "anthropic-messages" as const,
+      reasoning: false,
+      contextWindow: 1_000_000,
+      maxTokens: 65_536,
+    }
+    assert.equal(compatForModel(model).forceAdaptiveThinking, undefined)
+  })
+
+  it("flags reasoning effort for openai-completions models via the runtime table", () => {
+    const model = {
+      id: "gpt-6-sol",
+      name: "GPT-6 Sol (CC)",
+      api: "openai-completions" as const,
+      reasoning: false,
+      contextWindow: 1_050_000,
+      maxTokens: 65_536,
+    }
+    const compat = compatForModel(model, {
+      "gpt-6-sol": ["low", "medium", "high", "xhigh", "max"] as const,
+    })
+    assert.equal(compat.supportsReasoningEffort, true)
+    assert.equal(compat.maxTokensField, "max_tokens")
+    assert.equal(compat.forceAdaptiveThinking, undefined)
   })
 
   it("rejects unexpected API shapes", () => {

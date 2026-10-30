@@ -24,14 +24,14 @@ import { calculateCommandCodeCost } from "./src/cost.ts"
 import {
   apiForModelId,
   baseUrlForModel,
+  compatForModel,
   DEFAULT_MODELS_URL,
   DEFAULT_PROVIDER_API_BASE,
   getModelsTimeoutMs,
   inputModalitiesForModel,
+  isReasoningCapable,
   loadCachedCommandCodeModels,
   loadCommandCodeModels,
-  effortsForModel,
-  isReasoningCapable,
   thinkingMetadataForModel,
   type CommandCodeModel,
 } from "./src/models.ts"
@@ -118,34 +118,6 @@ function commandCodeHeaders(): Record<string, string> | undefined {
 }
 
 /** Host compat overrides per upstream api family; forwarded to `streamSimple` opaquely. */
-function compatForModel(
-  model: CommandCodeModel,
-  dynamicEfforts: ModelEffortsMap | undefined,
-): Record<string, unknown> {
-  if (model.api === "openai-completions") {
-    return {
-      supportsStore: false,
-      supportsDeveloperRole: false,
-      supportsReasoningEffort: effortsForModel(model.id, dynamicEfforts) !== undefined,
-      maxTokensField: "max_tokens",
-    }
-  }
-  const compat: {
-    supportsEagerToolInputStreaming: boolean
-    supportsLongCacheRetention: boolean
-    supportsCacheControlOnTools: boolean
-    supportsToolReferences: boolean
-    forceAdaptiveThinking?: boolean
-  } = {
-    supportsEagerToolInputStreaming: false,
-    supportsLongCacheRetention: false,
-    supportsCacheControlOnTools: false,
-    supportsToolReferences: false,
-  }
-  if (model.reasoning) compat.forceAdaptiveThinking = true
-  return compat
-}
-
 function createProviderConfig(
   models: readonly CommandCodeModel[],
   apiBase: string,
